@@ -98,9 +98,9 @@
 
 <br/>
 
-| ⛓ **11**<br>UUPS registries on Base L2 | 🔎 **10**<br>scanner modules | 🧠 **τ 0.975**<br>GNN ranking accuracy | 🧪 **211**<br>contract tests | 🛡 **7**<br>compliance frameworks |
+| ⛓ **11**<br>UUPS registries on Base L2 | 🔎 **27**<br>scanner modules | 🧠 **τ-b 0.7168**<br>out-of-sample ranking (tie) | 🧪 **213**<br>contract tests | 🛡 **11**<br>compliance frameworks |
 |:---:|:---:|:---:|:---:|:---:|
-| EIP-712 gasless · 7-day timelock | TLS · SSH · source · binary | PyTorch Geometric + RL agent | unit · invariant · fuzz · attack | NIST · CNSA 2.0 · FIPS · NIS2 · FISMA · FedRAMP · CMMC |
+| EIP-712 gasless · 7-day timelock | TLS · SSH · source · binary | PyTorch Geometric + RL agent · in-distribution τ 0.971 | unit · invariant · fuzz · attack | NIST · CNSA 2.0 · FIPS · NIS2 · FISMA · FedRAMP · CMMC · PCI · BSI · NCSC · ASD |
 
 ---
 
@@ -173,7 +173,7 @@ flowchart TB
     end
 
     subgraph PLAN["③ PLAN — GNN + RL"]
-        gnn["PyTorch Geometric GNN<br/>Kendall τ 0.975 · RL agent"]
+        gnn["PyTorch Geometric GNN<br/>LOO Kendall τ-b 0.7168 · RL agent"]
     end
 
     subgraph ATTEST["④ ATTEST — Base L2"]
@@ -197,7 +197,7 @@ flowchart TB
 <img src="assets/demo-terminal.gif" width="880" alt="Q-Trust live demo — scan, plan, attest" />
 </div>
 
-<sub>**Real CLI, real flow**: `crypto-inspector` scans a live endpoint and emits a CycloneDX 1.7 CBOM, the GNN planner ranks migrations (τ 0.975 vs heuristic optimum), and the evidence root is anchored on Base L2.</sub>
+<sub>**Real CLI, real flow**: `crypto-inspector` scans a live endpoint and emits a CycloneDX 1.7 CBOM, the GNN planner ranks migrations (out-of-sample τ-b 0.7168 on 42 host-disjoint real CBOMs — a published tie with the doctrine heuristic), and the evidence root is anchored on Base L2.</sub>
 
 <sub>▶ **[Try it live in your browser](https://huggingface.co/spaces/KRISHNAPURI/q-trust-scanner)** — paste code, get crypto-usage classification (runs locally via ONNX, no upload) · 📦 [datasets](https://huggingface.co/datasets/KRISHNAPURI/q-trust-datasets) · 🤖 [model](https://huggingface.co/KRISHNAPURI/q-trust-codebert)</sub>
 
@@ -218,7 +218,7 @@ flowchart TB
 <a href="#-measured-results"><img src="assets/feature-ai.png" width="280" alt="GNN planner"/></a>
 <h4>🧠 Plan</h4>
 <sub><b>GNN priority ranking + RL sequencing</b><br/><br/>
-PyTorch Geometric model scores Kendall τ 0.975 against heuristic optimum; RL agent sequences migrations with cost estimates.</sub>
+PyTorch Geometric model scores Kendall τ-b 0.7168 out-of-sample on 42 host-disjoint real CBOMs (in-distribution τ 0.971, synthetic); RL agent sequences migrations with cost estimates.</sub>
 </td>
 <td width="33%" align="center" valign="top">
 <a href="#-gpu-accelerated-analytics-optional"><img src="assets/feature-chain.png" width="280" alt="On-chain anchoring"/></a>
@@ -249,7 +249,7 @@ Hash-chained evidence ledger anchored to Base L2 via EIP-712 gasless relays — 
 </details>
 
 <details>
-<summary><b>🧮 Compliance frameworks — 7 rule sets</b></summary>
+<summary><b>🧮 Compliance frameworks — 11 rule sets</b></summary>
 <br/>
 
 | Framework | Scope | Sample rules |
@@ -261,6 +261,10 @@ Hash-chained evidence ledger anchored to Base L2 via EIP-712 gasless relays — 
 | FISMA | Federal systems | FIPS modules, NIST algorithms, key management |
 | FedRAMP | Cloud services | CNSA Suite, TLS 1.2+, validated modules |
 | CMMC | DoD supply chain | CUI protection, key management, audit trails |
+| PCI DSS 4.0 | Payment data | Crypto inventory (12.3.3), RSA ≥ 2048, no MD5/SHA-1 signatures, TLS 1.2+ |
+| BSI TR-02102 | German federal | Approved algorithms, key lengths, protocol versions |
+| NCSC UK | UK guidance | PQC migration timelines, approved algorithms |
+| ASD ISM | Australian govt | Cryptographic controls, PQC guidance |
 
 </details>
 
@@ -355,14 +359,14 @@ flowchart LR
 | Capability | Result | Source |
 |---|---|---|
 | Migration ranking | Kendall **τ 0.9637** vs heuristic optimum (held-out, 3-seed mean ± 0.0002) | [`planner/results/benchmark.json`](planner/results/benchmark.json) |
-| GNN v3 @ scale (synthetic) | 100K graphs · BF16 · per-graph ListMLE — held-out **τ 0.975** | [`planner/results/benchmark_v3.json`](planner/results/benchmark_v3.json) |
-| **GNN v3 + real data (LOO)** | in-dist **τ 0.9710** · **out-of-sample 40-fold LOO** on host-disjoint real TLS CBOMs (280 hosts, re-run 2026-09-02 on the deterministic-kernel harness, 30-epoch fine-tune, folds sharded across **4 A100s**): **τ-b 0.7263** vs doctrine heuristic **0.7450** (Δ **−0.0188**) — **reproduces the doctrine on 38/40** held-out real CBOMs (0 wins / 38 ties / 2 losses, both small heavily-tied n≤8 graphs) · **+0.503 vs random** | [`planner/results/real_cbom_loo_40.json`](planner/results/real_cbom_loo_40.json) · in-sample suite [`benchmark_real_v3.json`](planner/results/benchmark_real_v3.json) |
+| GNN v3 @ scale (synthetic, in-distribution) | 100K graphs · BF16 · per-graph ListMLE — held-out **τ 0.975** | [`planner/results/benchmark_v3.json`](planner/results/benchmark_v3.json) |
+| **GNN v3 + real data (40-fold LOO, superseded)** | in-dist **τ 0.9710** · **out-of-sample 40-fold LOO** on host-disjoint real TLS CBOMs (historical corpus, re-run 2026-09-02 on the deterministic-kernel harness): **τ-b 0.7263** vs doctrine heuristic **0.7450** (Δ **−0.0188**) — 0 wins / 38 ties / 2 losses · **+0.503 vs random**. Superseded by the leakage-audited 42-fold run below | [`planner/results/real_cbom_loo_40.json`](planner/results/real_cbom_loo_40.json) · in-sample suite [`benchmark_real_v3.json`](planner/results/benchmark_real_v3.json) |
 | **GNN v3 + real data (42-fold LOO)** | Same protocol, re-run 2026-09-18 on the **42-CBOM / 277-host disjoint corpus** (30-epoch fine-tune, 2 A100 shards): **τ-b 0.7168** vs doctrine heuristic **0.7210** (Δ **−0.0042**, medians identical 0.7237) — **0 wins / 41 ties / 1 loss**, model top-10 **1.0** on every fold · **+0.687 vs random (0.0301)** | [`planner/results/real_cbom_loo_42.json`](planner/results/real_cbom_loo_42.json) |
 | RL migration agent | **100%** completion on 40 packed real-CBOM estates (risk labels derived from the real scan fields: RSA-1024 → critical, RSA-2048 → high, expired/near-expiry raise the class) · mean reward **140.34** ± 8.13 vs doctrine heuristic **140.62** (Δ **−0.28** — **statistical tie**) vs random **136.84** (+**3.50**, +**2.6%**) — learns real risk-priority and matches the doctrine on real estates ([bit-reproducible](docs/TRUTH_AUDIT.md): 2/40 wins · 27 ties · 11 losses) | [`planner/results/rl_benchmark_real_cbom.json`](planner/results/rl_benchmark_real_cbom.json) |
 | Code discovery model | CodeBERTa fine-tuned on **13,973 real code files** incl. SolidiFI/SmartBugs/EIPs/WebAuthn blockchain contracts (seed-pinned, deterministic — same seed → same F1) — held-out **precision 0.952 / recall 0.953 / F1 0.952** (2,415 unseen files), beating all baselines (6/7 beat naive, mean relative gain 1.55×) | [`qtrust_ai/artifacts/benchmark_comparison.json`](qtrust_ai/artifacts/benchmark_comparison.json) · run log [`training_report_real.json`](qtrust_ai/artifacts/training_report_real.json) |
 | Real-data corpus | **13,973** real code files (incl. SolidiFI/SmartBugs/EIPs/WebAuthn) · **277** live TLS hosts · **401** NVD CVEs · **54** real liboqs timing trace sets | [`scripts/build_real_datasets.py`](scripts/build_real_datasets.py) + [`scripts/expand_real_corpus.py`](scripts/expand_real_corpus.py) |
 | API throughput | **147.8 req/s** @ 100 VUs · p95 **11.3 ms** (anvil, 24-core / A100) | [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) |
-| Contract tests | **211** — unit + invariant (1000 runs) + fuzz + attack | [`CHANGELOG.md`](CHANGELOG.md) |
+| Contract tests | **213** — unit + invariant (1000 runs) + fuzz + attack | [`PROJECT_SCORECARD.md`](PROJECT_SCORECARD.md) |
 | Scanner coverage | **12+** source languages · **10+** manifest formats | [`inspector/`](inspector/) |
 | Side-channel detector | **54/54 clean traces → VERIFIED/LOW_RISK (0 false alarms)** · **51/54 leak-injected → HIGH_RISK** (3 misses, all low-sample keygen ops) — trained on 54 real liboqs trace sets (PQC + RSA/ECC baselines), loss 0.178→0.080, calibration anchors 0.000/1.000 | [`inspector/side_channel_model_real.pt`](inspector/) · `scripts/train_real_side_channel.py` |
 | Crypto discovery head-to-head | CryptoAPI-Bench: usage recall **164/187 = 0.877**, file-level misuse precision **0.932** · ApacheCryptoAPI-Bench (71/121 mapped): **R 0.971 / P 0.532 / F1 0.688** — usage discovery, not misuse detection; no superiority claim over misuse SOTA | [`benchmarks/external/HEAD-TO-HEAD.md`](benchmarks/external/HEAD-TO-HEAD.md) |
@@ -372,24 +376,20 @@ flowchart LR
 > evaluated on real data**: a **real code corpus of 13,973 files** (incl. 915
 > real SolidiFI/SmartBugs/EIPs/WebAuthn blockchain contracts) from production
 > crypto libraries (openssl, boringssl, aws-lc, mbedtls, wolfssl, nodejs,
-> golang, pyca, liboqs, …), **277 live TLS-scanned hosts** converted into **40
-> host-disjoint real enterprise CBOMs**, **401 real NVD CVEs**, and **5 real
-> liboqs timing trace sets**. The planner's headline
-> out-of-sample real-CBOM score comes from the **host-disjoint 40-fold
+> golang, pyca, liboqs, …), **277 live TLS-scanned hosts** converted into **42
+> host-disjoint real enterprise CBOMs (zero cross-CBOM host overlap)**, **401
+> real NVD CVEs**, and **54 real liboqs timing trace sets**. The planner's
+> headline out-of-sample real-CBOM score comes from the **host-disjoint 42-fold
 > leave-one-out** protocol (`scripts/eval_real_cbom_loo.py`): **tie-aware
-> Kendall τ-b 0.7263** vs the doctrine heuristic **0.7450** (Δ −0.0188,
-> 30-epoch fine-tune, 2,000 synthetic per fold, folds sharded across 4 A100s
-> via `--fold-start/--fold-end` and merged with `--merge-shards`, re-run
-> 2026-09-02 on the deterministic-kernel harness) — the GNN **reproduces the
-> migration doctrine on 38 of 40 held-out real estates** (0 wins / 38 ties /
-> 2 losses; the two losing folds are small heavily-tied graphs, n≤8 and n≤13,
-> where one mis-ranked asset swings the whole fold); beats random by
-> **+0.503**. Note: the earlier τ-b 0.7377 (39/40) figure predates the
-> deterministic-kernel fix in `train_gpu.py` (seeded shuffles + cudnn
-> deterministic), which changed per-fold fine-tune outcomes slightly — the
-> current number is the reproducible one (verified: a fresh 3-fold run is
-> bit-identical to the merged shards). The 60-epoch fine-tune variant overfits
-> the synthetic mix (Δ −0.055), so 30 epochs is the best out-of-sample
+> Kendall τ-b 0.7168** vs the doctrine heuristic **0.7210** (Δ −0.0042,
+> medians identical 0.7237; 30-epoch fine-tune, 2,000 synthetic per fold,
+> re-run 2026-09-18 on 2× A100 and merged with `--merge-shards`) — **0 wins /
+> 41 ties / 1 loss**, model top-10 **1.0** on every fold, **+0.687 vs random**.
+> This is a **published tie**, not a superiority claim; beating the heuristic
+> requires expert pairwise labels (`QTrust-RiskBench`). The earlier 40-fold
+> corpus (280 hosts, 11 cross-CBOM duplicates) and its τ-b 0.7263 / 0.7450
+> result are kept as historical records only. The 60-epoch fine-tune variant
+> overfits the synthetic mix (Δ −0.055), so 30 epochs is the best out-of-sample
 > operating point.
 > (Identical assets — e.g. eight RSA-2048 certs — are genuinely
 > indistinguishable, so τ-b only rewards ranking the distinguishable groups;
@@ -462,7 +462,7 @@ Dashboard at `http://localhost:3000` · API at `http://localhost:3001` · Grafan
 <br/>
 
 ```bash
-# Contracts (Foundry — 211 tests incl. invariant + fuzz + attack)
+# Contracts (Foundry — 213 tests incl. invariant + fuzz + attack)
 cd contracts && forge test
 
 # Planner (PyTorch Geometric)
@@ -621,13 +621,13 @@ gantt
     axisFormat %b %Y
 
     section Landed
-    11 registries + 211 tests        :done, 2025-11, 2026-02
-    v2.0 scanner (10 modules)        :done, 2026-02, 2026-05
-    GNN planner (τ 0.975)            :done, 2026-03, 2026-06
-    7 CI pipelines + docs site       :done, 2026-05, 2026-07
+    11 registries + 213 tests        :done, 2025-11, 2026-02
+    v2.0 scanner (27 modules)        :done, 2026-02, 2026-05
+    GNN planner (LOO τ-b 0.7168)     :done, 2026-03, 2026-06
+    11 CI pipelines + docs site      :done, 2026-05, 2026-07
 
     section In flight
-    Base Sepolia deployment          :active, 2026-08, 2026-10
+    Base Sepolia deployment (blocked: deployer key) :active, 2026-08, 2026-10
     External security audit          :2026-10, 2026-12
 
     section Next
@@ -638,8 +638,8 @@ gantt
 
 | Status | Milestone |
 |:---:|---|
-| ✅ | v2.0 — 10-module scanner, 7 compliance frameworks, CycloneDX 1.7 + SARIF 2.1 |
-| ✅ | GNN planner (τ 0.975) + RL migration agent |
+| ✅ | v2.0 — 27-module scanner, 11 compliance frameworks, CycloneDX 1.7 + SARIF 2.1 |
+| ✅ | GNN planner (42-fold LOO τ-b 0.7168; in-distribution τ 0.971) + RL migration agent |
 | ✅ | Bank pilot end-to-end demo (`pilot/`) |
 | 🔄 | Base Sepolia deployment + public verification page |
 | 🔄 | Independent security audit |

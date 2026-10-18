@@ -104,6 +104,7 @@ nav:
       - Developer roadmap: DEVELOPER_ROADMAP.md
       - Strategic analysis: STRATEGIC_ANALYSIS.md
   - Reference:
+      - Reproduce benchmarks: REPRODUCE.md
       - Whitepaper: WHITEPAPER.md
       - Performance: PERFORMANCE.md
       - GPU Features: GPU_FEATURES.md
@@ -122,6 +123,7 @@ nav:
       - ADR 0004 — Postgres read model with RPC fallback: adr/0004-postgres-read-model-with-rpc-fallback.md
       - ADR 0005 — In-house Python VC/DID (Veramo for JS later): adr/0005-in-house-python-vc-did-veramo-for-js-later.md
       - ADR 0006 — Deterministic content-addressed IDs: adr/0006-deterministic-content-addressed-ids.md
+      - ADR 0007 — Identity, tenancy and RBAC: adr/0007-identity-tenancy-rbac.md
   - Runbooks:
       - Backup & Restore: runbook/backup-restore.md
       - Incident Response: runbook/incident-response.md

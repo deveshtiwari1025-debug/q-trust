@@ -221,6 +221,9 @@ qtrust_data/raw/uni_cbom.json
 qtrust_data/silver/MANIFEST.json
 qtrust_data/silver/features_v1.jsonl
 qtrust_data/splits/split_manifest.json
+# Fetched Hugging Face package (see scripts/fetch_datasets.py)
+qtrust_data/hf/
+**/FETCH_LEDGER.json
 qtrust_data/splits/train.json
 qtrust_data/splits/val.json
 qtrust_data/splits/test.json

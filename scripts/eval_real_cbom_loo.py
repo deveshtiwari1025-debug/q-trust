@@ -84,7 +84,13 @@ def load_real_graphs(cbom_dir: Path, seed: int):
     graphs = []
     for p in sorted(cbom_dir.glob("*.json")):
         import json as _j
+        # The published corpus ships a MANIFEST.json alongside the CBOMs; it is
+        # not a CBOM. Skip it (and any empty payload) instead of crashing.
+        if p.name.upper() == "MANIFEST.JSON":
+            continue
         cbom = _j.loads(p.read_text())
+        if not isinstance(cbom.get("assets"), list) or not cbom["assets"]:
+            continue
         graphs.append((p.name, cbom_to_dependency_graph(cbom, seed=seed)))
     return graphs
 
@@ -348,6 +354,12 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--out", type=Path, default=RESULT_PATH)
+    parser.add_argument(
+        "--cbom-dir",
+        type=Path,
+        default=CBOM_DIR,
+        help="directory of host-disjoint CBOM JSON files (default: historical 40-file corpus)",
+    )
     parser.add_argument("--quick", action="store_true", help="3 folds (smoke test)")
     parser.add_argument("--fold-start", type=int, default=0,
                         help="first fold index for this shard (GPU-parallel LOO)")
@@ -370,4 +382,5 @@ if __name__ == "__main__":
         out_path=args.out,
         fold_start=args.fold_start,
         fold_end=args.fold_end,
+        cbom_dir=args.cbom_dir,
     )

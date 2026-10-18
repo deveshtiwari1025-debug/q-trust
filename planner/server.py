@@ -29,6 +29,8 @@ from pydantic import BaseModel, Field
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
+from qtrust_planner.recommend import recommend_target
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -713,6 +715,7 @@ def plan(req: PlanRequest) -> dict[str, Any]:
             "priority_score": float(priority_scores[idx]),
             "risk_score": float(risk_scores[idx]),
             "migrate_days": migrate_days,
+            "recommendation": recommend_target(asset),
         })
 
     schedule = None
@@ -812,6 +815,7 @@ def _rl_migration_order(req: PlanRequest) -> tuple[list[dict[str, Any]], str] | 
             "key_size": key_size,
             "criticality": criticality,
             "pqc_ready": bool(a.get("pqc_ready", False)),
+            "usage": a.get("usage") or a.get("asset_type") or "",
         })
 
     n = len(records)
@@ -861,6 +865,7 @@ def _rl_migration_order(req: PlanRequest) -> tuple[list[dict[str, Any]], str] | 
             "priority_score": float(policy_logits[idx].item()),
             "risk_score": float(_heuristic_risk({**asset, "index": idx})),
             "migrate_days": _estimate_migrate_days(asset["algorithm"], asset["key_size"]),
+            "recommendation": recommend_target(asset),
         })
     return migration_order, "rl_policy"
 
@@ -899,6 +904,7 @@ def rl_plan(req: PlanRequest) -> dict[str, Any]:
                 "key_size": a["key_size"],
                 "criticality": a.get("criticality", "Medium"),
                 "pqc_ready": bool(a.get("pqc_ready", False)),
+                "usage": a.get("usage") or a.get("asset_type") or "",
             }
             for i, a in enumerate(assets)
         ]
@@ -913,6 +919,7 @@ def rl_plan(req: PlanRequest) -> dict[str, Any]:
                 "priority_score": float(scores[idx]),
                 "risk_score": float(_heuristic_risk(asset)),
                 "migrate_days": _estimate_migrate_days(asset["algorithm"], asset["key_size"]),
+                "recommendation": recommend_target(asset),
             })
         method = "heuristic_fallback"
 

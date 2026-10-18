@@ -8,12 +8,29 @@
 
 ## How to use
 
-Extract at the **repository root** (paths overlay directly onto the repo):
+The authoritative package is published at
+<https://huggingface.co/datasets/KRISHNAPURI/q-trust-datasets>. Fetch the
+subset you need with checksum verification:
 
 ```bash
-cd q-trust/
-tar -xzf q-trust-datasets.tar.gz          # creates/merges the directories below
+# metadata only (README, DATASETS.md, SHA256SUMS.txt, manifest.json)
+python scripts/fetch_datasets.py --subset manifest
+
+# benchmark tables / CBOM fixtures / full code corpus
+python scripts/fetch_datasets.py --subset parquet
+python scripts/fetch_datasets.py --subset cboms
+python scripts/fetch_datasets.py --subset code
 ```
+
+Files land in `qtrust_data/hf/` by default; use `--dest` to choose another
+directory. Do **not** overlay the package over the repository root: it ships its
+own `README.md`/`DATASETS.md`, which would overwrite the project's files. A
+checksum mismatch fails the download. As of 2026-10-18
+the published `DATASETS.md` itself does not match the package's
+`SHA256SUMS.txt`; use `--allow-checksum-drift` only to record that upstream
+drift in `FETCH_LEDGER.json` after inspecting it. See
+[`qtrust_data/README.md`](qtrust_data/README.md) and
+[`docs/REPRODUCE.md`](docs/REPRODUCE.md).
 
 Honest-labeling policy (per `docs/TRUTH_AUDIT.md`): every directory below carries a
 `MANIFEST.json` with `status` = `REAL` or `SYNTHETIC_DEMO`. Never publish demo data as expert/enterprise results.

@@ -27,10 +27,12 @@ repository's **Security tab → "Report a vulnerability"**
 confidential end-to-end and lets us coordinate disclosure and CVE assignment
 in one place.
 
-<!-- TODO(owner): confirm private vulnerability reporting is ENABLED in
-     repo Settings → Code security and analysis, and optionally publish a
-     security@ contact / PGP key at /.well-known/security.txt. Until then,
-     GitHub private reporting is the only supported channel. -->
+A machine-readable policy is published at
+[`/.well-known/security.txt`](https://humoge7502.github.io/q-trust/.well-known/security.txt)
+(RFC 9116); its source of truth is
+[`.well-known/security.txt`](.well-known/security.txt). Private vulnerability
+reporting is enabled on the repository, so the Security tab is the only
+supported channel until a PGP key is published.
 
 Please **do not open public GitHub issues, PRs, or discussions** for
 suspected vulnerabilities.

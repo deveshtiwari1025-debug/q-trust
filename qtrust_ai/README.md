@@ -1,5 +1,12 @@
 # Q-Trust AI Intelligence Layer
 
+> **RESEARCH ONLY — not part of the shipped product.** This package contains
+> experimental models and several explicit stubs (`temporal_gnn.py`,
+> `multi_objective_rl.py`, `code_detector.py`'s hash fallback, and others).
+> Nothing in `backend/`, `planner/`, `inspector/`, `frontend/` or `sdk/`
+> imports it. Metrics produced here are labeled REAL/SYNTHETIC/DEMO in
+> `docs/TRUTH_AUDIT.md`; do not quote them as product performance.
+
 > **Beyond migration prioritization — a full PQC migration operating system.**
 
 This package implements the 32-point transformation (user spec) to make Q-Trust **way ahead** of SandboxAQ / IBM / Keyfactor etc., who sell dashboards, not predictive systems.

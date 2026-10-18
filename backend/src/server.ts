@@ -21,6 +21,7 @@ import { registerWebhookRoutes } from "./routes/webhooks.js";
 import { gracefulShutdown, requireApiKey } from "./middleware/auth.js";
 import { initSentry, registerSentryHooks } from "./plugins/sentry.js";
 import { registerMetrics } from "./plugins/metrics.js";
+import { AuditLog, MemoryAuditSink, PostgresAuditSink, registerAuditLog } from "./services/audit-log.js";
 import { CORS_ORIGINS, CHAIN_ID } from "./config.js";
 import { relayerAddress } from "./services/attestation.js";
 
@@ -89,6 +90,20 @@ if (process.env.QTRUST_RATE_LIMIT_MAX === "0") {
 
 registerSentryHooks(server);
 registerMetrics(server);
+
+// EN-02: append-only audit trail for every mutating request. Postgres is the
+// durable sink; without it (local dev) an in-memory sink preserves the API
+// contract but not durability, and says so at startup.
+const auditLog = new AuditLog(pgPool ? new PostgresAuditSink(pgPool) : new MemoryAuditSink());
+registerAuditLog(server, {
+  log: auditLog,
+  disabled: process.env.QTRUST_AUDIT_LOG_DISABLED === "1",
+});
+if (!pgPool && process.env.QTRUST_AUDIT_LOG_DISABLED !== "1") {
+  server.log.warn(
+    "audit log is using the in-memory sink (no QTRUST_PG_URL); entries are not durable",
+  );
+}
 
 await server.register(swagger, {
   openapi: { info: { title: "Q-Trust API", version: PACKAGE_VERSION, description: "Q-Trust supply-chain verification API." }, servers: [{ url: process.env.QTRUST_PUBLIC_URL ?? "http://localhost:3001" }] },

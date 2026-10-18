@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — P0 credibility, EN-02 audit log, and supply-chain hardening (2026-10-18)
+
+- **Claim integrity gates:** `scripts/check_readme_claims.py` fails CI when the
+  README's contract-test/framework/scanner counts drift from
+  `PROJECT_SCORECARD.md`, `compliance.py` and the inspector package, when
+  in-distribution metrics are unlabeled, when relative links break, or when the
+  two `security.txt` copies diverge. `scripts/check_version_sync.py` fails on
+  manifest version drift. Both run in the new `docs-contract` CI job.
+- **README / release truth:** the headline τ **0.7168** is now the 42-fold
+  out-of-sample tie (heuristic **0.7210**), `0.975` is labeled
+  synthetic/in-distribution, counts are 213 tests / 11 frameworks / 27 modules,
+  the superseded 40-fold row is marked historical, and Base Sepolia is marked
+  blocked on a deployer key.
+- **Versions:** backend, frontend, SDK and inspector manifests now agree at
+  `2.2.3` (releases were v2.2.2/v2.2.3 against 2.2.0 manifests).
+- **Audit log (EN-02):** append-only, SHA-256 hash-chained `audit_log` table
+  with an UPDATE/DELETE-rejecting trigger; `backend/src/services/audit-log.ts`
+  records every mutating request with redacted bodies, hashed actor key, org,
+  IP, request id and status; `verifyAuditChain()` detects tampering. Six tests,
+  backend suite now **114 passed**.
+- **Deterministic migration targets:** `planner/qtrust_planner/recommend.py`
+  adds a standard-cited `recommendation` object (target, alternative, FIPS
+  reference, rationale, confidence, CNSA alternative) to `/plan`, `/rl/plan`
+  and the heuristic fallback. Ten policy tests.
+- **Dataset fetch:** `scripts/fetch_datasets.py` pulls the published HF package
+  by subset and verifies `SHA256SUMS.txt`; checksum drift is a hard failure
+  unless explicitly recorded in `FETCH_LEDGER.json`. Documents the known
+  upstream `DATASETS.md` drift and the incomplete `real_cboms_v2` copy.
+- **Benchmark artifact gate:** `scripts/check_benchmark_artifacts.py` re-reads
+  the committed LOO-42/LOO-40/RL/CodeBERTa artifacts, checks headline numbers
+  and provenance, and (with `--require-corpus`) verifies the canonical 42-CBOM
+  corpus has 277 unique hosts and zero overlap. Runs in CI.
+- **Supply chain:** Docker publishing now emits SBOM + max provenance and signs
+  the image digest with keyless cosign; releases sign every wheel/sdist;
+  PyPI publishing carries PEP 740 attestations.
+- **Disclosure:** root `.well-known/security.txt`, published to GitHub Pages by
+  `docs.yml`; the stale TODO in `SECURITY.md` is gone.
+- **Docs:** `docs/REPRODUCE.md`, ADR 0007 (identity/tenancy/RBAC),
+  `qtrust_data/README.md`, and explicit RESEARCH-ONLY banners on `qtrust/` and
+  `qtrust_ai/`.
+
+### Changed — dependency and CI hygiene (2026-10-18)
+
+- Backend `fastify` → `^5.12.7` plus overrides for `fast-uri`, `ip-address`,
+  `fast-copy` and `source-map-js`; backend audit is now **0 vulnerabilities**.
+- Frontend `next` → `^16.4.2`; added the `@x402/*` peer packages that
+  Next 16.4's Turbopack resolves for `@coinbase/cdp-sdk`, restoring a clean
+  `next build`.
+- CI frontend audit gates the **runtime** tree (`--omit=dev`); the unpatched
+  dev-only `brace-expansion` advisory reachable through `eslint-config-next`
+  is reported but non-blocking. `security.yml` now audits backend/frontend/docs
+  daily, and `ci.yml` runs weekly to catch advisory drift on an idle `main`.
+
 ### Changed — governance sync with Sep-18 training evidence (2026-09-18)
 
 - `EXPERIMENTS.md`: E-06 (42-fold LOO τ-b 0.7168), E-07 (side-channel

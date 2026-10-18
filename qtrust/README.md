@@ -1,5 +1,14 @@
 # Q-Trust Factory
 
+> **RESEARCH ONLY — not part of the shipped product.** This package is the
+> experiment/benchmark factory behind the papers and the `planner/` model. It
+> is **not imported by** `backend/`, `planner/`, `inspector/`, `frontend/`, or
+> `sdk/`, and several modules are explicit CPU stubs (greedy CP-SAT, placeholder
+> digital twin, hard-coded what-if, synthetic graph builder). Do not present
+> these as customer-facing capabilities. The product planner lives in
+> `planner/qtrust_planner/`; see `docs/TRUTH_AUDIT.md` for the claim
+> classification of every metric.
+
 See `../README_FACTORY.md` for full 64-section strategy.
 
 Quick start:
