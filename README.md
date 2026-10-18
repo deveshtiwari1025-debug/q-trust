@@ -609,6 +609,11 @@ crypto-inspector scan example.com --risk --compliance nist,cnsa
 <a name="roadmap"></a>
 ## 🗺 Roadmap
 
+> **Beyond features:** the evidence-based plan for what it takes to be
+> best-in-class — trust and audit, enterprise operability, coverage, the data
+> moat, and distribution — is
+> [`docs/BEST_IN_CLASS_ROADMAP.md`](docs/BEST_IN_CLASS_ROADMAP.md).
+
 ```mermaid
 gantt
     title Q-Trust Roadmap (dates indicative)
