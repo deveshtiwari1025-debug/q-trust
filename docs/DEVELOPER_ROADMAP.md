@@ -1,5 +1,10 @@
 # Q-Trust — Developer's Roadmap (measured, not aspirational)
 
+> For the domain-level, evidence-based plan (trust, enterprise readiness,
+> coverage, data moat, distribution), see
+> [BEST_IN_CLASS_ROADMAP.md](BEST_IN_CLASS_ROADMAP.md). This document remains
+> the model-by-model measured record.
+
 *Written 2026-08-30. Every number below was reproduced in this session on the
 real corpus — none are estimates.*
 

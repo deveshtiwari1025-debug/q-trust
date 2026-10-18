@@ -99,6 +99,10 @@ nav:
       - Integrate the SDK: guides/integrate-sdk.md
       - Operate the stack: guides/operate-stack.md
   - Architecture: ARCHITECTURE.md
+  - Strategy:
+      - Best-in-class roadmap: BEST_IN_CLASS_ROADMAP.md
+      - Developer roadmap: DEVELOPER_ROADMAP.md
+      - Strategic analysis: STRATEGIC_ANALYSIS.md
   - Reference:
       - Whitepaper: WHITEPAPER.md
       - Performance: PERFORMANCE.md
