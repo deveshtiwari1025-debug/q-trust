@@ -36,19 +36,22 @@ better.
 
 Code-level items from the plan are implemented and tested here. Items that
 require an auditor, a funded key, a cloud account, or a commercial agreement
-are explicitly **not** claimed as done.
+are explicitly **not** claimed as done. Workflow changes live in
+[`ops/ci/workflow-hardening.patch`](../ops/ci/workflow-hardening.patch) because
+the branch's automation identity lacks the GitHub App `workflows` permission;
+apply it with a `workflows`-scoped token (`ops/ci/README.md`).
 
 | Plan item | Status | Evidence |
 |---|---|---|
 | CR-01 metric truth | **Done** | README headline is out-of-sample τ-b 0.7168; 0.975 labeled synthetic |
-| CR-02 claim counts | **Done** | `scripts/check_readme_claims.py` + `docs-contract` CI job |
+| CR-02 claim counts | **Done** | `scripts/check_readme_claims.py` + `docs-contract` job in the workflow patch |
 | CR-03 version sync | **Done in repo** (publish pending tag) | all four manifests at 2.2.3; `scripts/check_version_sync.py` |
-| CR-04 dependency debt | **Done** | backend audit 0; frontend runtime audit 0; daily `npm-audit` job |
+| CR-04 dependency debt | **Done** | backend audit 0; frontend runtime audit 0; daily `npm-audit` job in the workflow patch |
 | CR-05 disclosure | **Done** | `.well-known/security.txt` + Pages publish + stale TODO removed |
 | CR-06 data reproducibility | **Done** | `scripts/fetch_datasets.py` verifies HF `SHA256SUMS.txt`; `--subset corpus` yields 42 CBOMs / 277 hosts / 0 overlap. The package's `real_cboms_v2_2026_09_18/` copy is incomplete (38/42); documented in `docs/REPRODUCE.md` |
 | CR-07 demo ownership | **Open (external)** | HF space still under `KRISHNAPURI` |
 | CR-08 positioning | **Open** | README Reality Check + SECURITY.md remain the honest status |
-| TR-05 supply chain | **Done** | SBOM + provenance + keyless cosign + PEP 740 |
+| TR-05 supply chain | **Done in patch** | SBOM + provenance + keyless cosign + PEP 740 in `ops/ci/workflow-hardening.patch` |
 | TR-08 reproduce guide | **Done** | `docs/REPRODUCE.md` with artifact hashes |
 | EN-02 audit log | **Partial** | hash-chained table + hook + 6 tests; SIEM export pending |
 | MI-01 target algorithms | **Done** | `planner/qtrust_planner/recommend.py` + 10 tests |

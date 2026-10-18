@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+> **Workflow note:** `.github/workflows/*` changes are provided as
+> [`ops/ci/workflow-hardening.patch`](ops/ci/workflow-hardening.patch) because
+> the automation identity for this branch is a GitHub App without the
+> `workflows` permission (git push rejects workflow edits). Apply it with a
+> `workflows`-scoped token; `ops/ci/README.md` lists what each change adds.
+> Everything outside `.github/workflows/` is committed and tested.
+
 ### Added — P0 credibility, EN-02 audit log, and supply-chain hardening (2026-10-18)
 
 - **Claim integrity gates:** `scripts/check_readme_claims.py` fails CI when the
@@ -14,7 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `PROJECT_SCORECARD.md`, `compliance.py` and the inspector package, when
   in-distribution metrics are unlabeled, when relative links break, or when the
   two `security.txt` copies diverge. `scripts/check_version_sync.py` fails on
-  manifest version drift. Both run in the new `docs-contract` CI job.
+  manifest version drift. Both are wired into the `docs-contract` job in the
+  workflow patch.
 - **README / release truth:** the headline τ **0.7168** is now the 42-fold
   out-of-sample tie (heuristic **0.7210**), `0.975` is labeled
   synthetic/in-distribution, counts are 213 tests / 11 frameworks / 27 modules,
@@ -38,12 +46,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Benchmark artifact gate:** `scripts/check_benchmark_artifacts.py` re-reads
   the committed LOO-42/LOO-40/RL/CodeBERTa artifacts, checks headline numbers
   and provenance, and (with `--require-corpus`) verifies the canonical 42-CBOM
-  corpus has 277 unique hosts and zero overlap. Runs in CI.
-- **Supply chain:** Docker publishing now emits SBOM + max provenance and signs
-  the image digest with keyless cosign; releases sign every wheel/sdist;
-  PyPI publishing carries PEP 740 attestations.
-- **Disclosure:** root `.well-known/security.txt`, published to GitHub Pages by
-  `docs.yml`; the stale TODO in `SECURITY.md` is gone.
+  corpus has 277 unique hosts and zero overlap. The workflow patch runs it in
+  CI.
+- **Supply chain (workflow patch):** Docker publishing emits SBOM + max
+  provenance and signs the image digest with keyless cosign; releases sign
+  every wheel/sdist; PyPI publishing carries PEP 740 attestations.
+- **Disclosure:** root `.well-known/security.txt`; the workflow patch publishes
+  it to GitHub Pages. The stale TODO in `SECURITY.md` is gone.
 - **Docs:** `docs/REPRODUCE.md`, ADR 0007 (identity/tenancy/RBAC),
   `qtrust_data/README.md`, and explicit RESEARCH-ONLY banners on `qtrust/` and
   `qtrust_ai/`.
@@ -57,8 +66,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `next build`.
 - CI frontend audit gates the **runtime** tree (`--omit=dev`); the unpatched
   dev-only `brace-expansion` advisory reachable through `eslint-config-next`
-  is reported but non-blocking. `security.yml` now audits backend/frontend/docs
-  daily, and `ci.yml` runs weekly to catch advisory drift on an idle `main`.
+  is reported but non-blocking. The workflow patch adds daily
+  backend/frontend/docs audits and a weekly full CI run to catch advisory drift
+  on an idle `main`.
 
 ### Changed — governance sync with Sep-18 training evidence (2026-09-18)
 
