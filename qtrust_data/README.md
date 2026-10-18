@@ -33,12 +33,15 @@ Default destination: `qtrust_data/hf/` (git-ignored). Use `--dest` to place it
 elsewhere, `--dry-run` to inspect, and `--insecure` only behind a trusted
 interception proxy.
 
-**Checksum policy.** A mismatch is a hard failure by default. As of
-2026-10-18 the published `DATASETS.md` does not match the package's own
-`SHA256SUMS.txt` (expected `d500bae0…`, actual `f0cd54a4…`); this is upstream
-drift, not a local error. `--allow-checksum-drift` downloads it, records the
-expected/actual pair in `FETCH_LEDGER.json`, and prints a warning. Never use
-that flag for data files without inspecting the ledger.
+**Checksum policy.** Data files must match `SHA256SUMS.txt` or the fetch fails.
+Package metadata (`README.md`, `DATASETS.md`, `manifest.json`) is allowed to
+drift with a recorded warning, because the package updates it without
+regenerating sums. As of 2026-10-18 the published `DATASETS.md` does not match
+the package's own `SHA256SUMS.txt` (expected `d500bae0…`, actual `f0cd54a4…`);
+this is upstream drift, not a local error. `--allow-checksum-drift` does the
+same for data files and records the expected/actual pair in
+`FETCH_LEDGER.json`. Never use that flag for data files without inspecting the
+ledger.
 
 ## What the pipeline expects
 

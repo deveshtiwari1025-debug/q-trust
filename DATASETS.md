@@ -25,7 +25,8 @@ python scripts/fetch_datasets.py --subset code
 Files land in `qtrust_data/hf/` by default; use `--dest` to choose another
 directory. Do **not** overlay the package over the repository root: it ships its
 own `README.md`/`DATASETS.md`, which would overwrite the project's files. A
-checksum mismatch fails the download. As of 2026-10-18
+data-file checksum mismatch fails the download; metadata drift is recorded with
+a warning. As of 2026-10-18
 the published `DATASETS.md` itself does not match the package's
 `SHA256SUMS.txt`; use `--allow-checksum-drift` only to record that upstream
 drift in `FETCH_LEDGER.json` after inspecting it. See

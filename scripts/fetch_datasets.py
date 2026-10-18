@@ -45,6 +45,9 @@ TREE = f"https://huggingface.co/api/datasets/{REPO}/tree/main?recursive=true"
 ROOT = Path(__file__).resolve().parents[1]
 
 MANIFEST_FILES = {"README.md", "DATASETS.md", "manifest.json", "SHA256SUMS.txt"}
+# Package metadata is updated independently of the data build, so a stale
+# checksum for these files is recorded (never silently accepted for data).
+METADATA_FILES = {"README.md", "DATASETS.md", "manifest.json"}
 SUBSET_PREFIXES = {
     "parquet": ("parquet/",),
     "corpus": ("qtrust_data/gold/cboms/",),
@@ -130,7 +133,7 @@ def download(
     actual = sha256_file(temp_path)
     drift: dict | None = None
     if expected and actual != expected:
-        if not allow_drift:
+        if not allow_drift and path not in METADATA_FILES:
             temp_path.unlink(missing_ok=True)
             raise SystemExit(
                 f"checksum mismatch for {path}\n  expected {expected}\n  actual   {actual}\n"
@@ -142,6 +145,7 @@ def download(
             "expected": expected,
             "actual": actual,
             "observed_at": datetime.now(timezone.utc).isoformat(),
+            "metadata": path in METADATA_FILES,
         }
     os.replace(temp_path, target)
     return ("downloaded" if expected else "downloaded (no checksum published)"), drift
