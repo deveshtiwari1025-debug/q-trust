@@ -38,6 +38,11 @@ param(
   # fixes, so prefer setting QTRUST_GITHUB_REPO_URL or passing -RepoUrl).
   [string]$RepoUrl = "",
   [string]$Branch = "main",
+  # URL of a planner hosted outside Render (for example the local GNN planner
+  # behind a Cloudflare tunnel). When set, no Render planner service is
+  # created and the backend targets this URL. Defaults to
+  # QTRUST_PLANNER_TUNNEL_URL in .env.
+  [string]$ExternalPlannerUrl = "",
   # Free tier has no persistent disks and no private services. This switch
   # keeps the evidence chain in the container filesystem and exposes the
   # planner as a public web service (still API-key protected).
@@ -223,9 +228,14 @@ $redisInfo = Invoke-Render -Method GET -Path "/key-value/$($redis.id)/connection
 $redisUrl = $redisInfo.internalConnectionString
 
 # ---------------------------------------------------------------- planner
-# Private services are not available on the free plan, so free tier exposes
-# the planner as a web service. It stays protected by QTRUST_PLANNER_API_KEY
-# (the backend sends x-api-key on every planner call).
+# An externally hosted planner (local GNN + tunnel) skips the Render planner
+# service entirely. Otherwise a private service (paid) or API-key protected
+# web service (free tier) is created.
+if ([string]::IsNullOrWhiteSpace($ExternalPlannerUrl)) { $ExternalPlannerUrl = $envMap["QTRUST_PLANNER_TUNNEL_URL"] }
+if (-not [string]::IsNullOrWhiteSpace($ExternalPlannerUrl)) {
+  $plannerUrl = $ExternalPlannerUrl.TrimEnd("/")
+  Write-Host "==> Planner: using external planner at $plannerUrl (no Render service)" -ForegroundColor Cyan
+} else {
 $plannerType = if ($FreeTier) { "web_service" } else { "private_service" }
 $plannerLabel = if ($FreeTier) { "web service (API-key protected)" } else { "private service" }
 Write-Host "==> Planner $plannerLabel" -ForegroundColor Cyan
@@ -271,6 +281,7 @@ if (-not $planner) {
 # protected at the application layer).
 $plannerUrl = "http://qtrust-planner:8000"
 if ($planner.serviceDetails.url) { $plannerUrl = $planner.serviceDetails.url.TrimEnd("/") }
+}
 
 # ---------------------------------------------------------------- backend
 Write-Host "==> Backend web service" -ForegroundColor Cyan
