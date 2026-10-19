@@ -61,10 +61,20 @@ if (-not [string]::IsNullOrWhiteSpace($ApiKey)) {
 
   Write-Host "==> Planner proxied endpoint"
   try {
-    $headers = @{ "x-api-key" = $ApiKey }
-    $planner = Invoke-RestMethod -Uri "$ApiUrl/v1/plans/health" -Headers $headers -TimeoutSec 60
-    Pass "api -> planner ($($planner.status))"
-  } catch { Fail "api /v1/plans/health" $_.Exception.Message }
+    # The planner is stateless: POST /v1/plans computes a fresh plan. The old
+    # GET /v1/plans/health check was retired (the backend now returns 410).
+    $headers = @{ "x-api-key" = $ApiKey; "content-type" = "application/json" }
+    $planBody = @{
+      cbom = @{ assets = @(@{ asset_id = "smoke-test"; algorithm = "RSA-2048" }) }
+      deadline = "2027-01-01"
+    } | ConvertTo-Json -Depth 8 -Compress
+    $planner = Invoke-RestMethod -Method Post -Uri "$ApiUrl/v1/plans" -Headers $headers -Body $planBody -TimeoutSec 120
+    if ($planner.planner -eq "qtrust-planner" -or $null -ne $planner.migration_order) {
+      Pass "api -> planner ($($planner.model.arch), $($planner.total_assets) asset(s))"
+    } else {
+      Fail "api /v1/plans" "unexpected payload: $($planner | ConvertTo-Json -Compress)"
+    }
+  } catch { Fail "api /v1/plans" $_.Exception.Message }
 
   Write-Host "==> Scanner: $ScanDirectory"
   try {
