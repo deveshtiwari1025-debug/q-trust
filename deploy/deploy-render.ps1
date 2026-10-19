@@ -150,7 +150,7 @@ function Wait-Database([string]$Kind, [string]$Id, [int]$TimeoutSeconds = 900) {
 }
 
 function Get-ByName([string]$Path, [string]$Name) {
-  $items = Get-Items (Invoke-Render -Method GET -Path "$Path?limit=100")
+  $items = Get-Items (Invoke-Render -Method GET -Path "${Path}?limit=100")
   return $items | Where-Object { $_.name -eq $Name } | Select-Object -First 1
 }
 
