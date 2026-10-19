@@ -43,6 +43,14 @@ param(
   # created and the backend targets this URL. Defaults to
   # QTRUST_PLANNER_TUNNEL_URL in .env.
   [string]$ExternalPlannerUrl = "",
+  # External datastore URLs (Neon Postgres / Upstash Redis). When set, the
+  # matching Render-managed datastore is skipped. Defaults come from
+  # QTRUST_EXTERNAL_PG_URL and QTRUST_EXTERNAL_REDIS_URL in .env.
+  [string]$ExternalPgUrl = "",
+  [string]$ExternalRedisUrl = "",
+  # Skip Redis entirely. The backend degrades gracefully (webhook
+  # subscriptions return 503); useful when no free Redis is available.
+  [switch]$SkipRedis,
   # Free tier has no persistent disks and no private services. This switch
   # keeps the evidence chain in the container filesystem and exposes the
   # planner as a public web service (still API-key protected).
@@ -188,6 +196,17 @@ $ownerId = $owner.id
 Write-Host "==> Render workspace: $($owner.name) ($ownerId)" -ForegroundColor Cyan
 
 # ---------------------------------------------------------------- datastores
+# External databases (Neon/Upstash provisioned through the Vercel Marketplace)
+# skip Render-managed datastores, which require a payment method even on the
+# free plan.
+if ([string]::IsNullOrWhiteSpace($ExternalPgUrl)) { $ExternalPgUrl = $envMap["QTRUST_EXTERNAL_PG_URL"] }
+if ([string]::IsNullOrWhiteSpace($ExternalRedisUrl)) { $ExternalRedisUrl = $envMap["QTRUST_EXTERNAL_REDIS_URL"] }
+
+if (-not [string]::IsNullOrWhiteSpace($ExternalPgUrl)) {
+  Write-Host "==> Postgres: using external database (no Render Postgres)" -ForegroundColor Cyan
+  $pg = $null
+  $pgUrl = $ExternalPgUrl
+} else {
 Write-Host "==> Postgres" -ForegroundColor Cyan
 $pg = Get-ByName "/postgres" "qtrust-postgres"
 if (-not $pg) {
@@ -207,7 +226,17 @@ if (-not $pg) {
 if ($pg.status -ne "available") { $pg = Wait-Database "postgres" $pg.id }
 $pgInfo = Invoke-Render -Method GET -Path "/postgres/$($pg.id)/connection-info"
 $pgUrl = $pgInfo.internalConnectionString
+}
 
+if ($SkipRedis) {
+  Write-Host "==> Key Value: skipped (-SkipRedis; webhook subscriptions disabled)" -ForegroundColor Cyan
+  $redis = $null
+  $redisUrl = ""
+} elseif (-not [string]::IsNullOrWhiteSpace($ExternalRedisUrl)) {
+  Write-Host "==> Key Value: using external Redis (no Render Key Value)" -ForegroundColor Cyan
+  $redis = $null
+  $redisUrl = $ExternalRedisUrl
+} else {
 Write-Host "==> Key Value (Redis)" -ForegroundColor Cyan
 $redis = Get-ByName "/key-value" "qtrust-redis"
 if (-not $redis) {
@@ -226,6 +255,7 @@ if (-not $redis) {
 if ($redis.status -ne "available") { $redis = Wait-Database "key-value" $redis.id }
 $redisInfo = Invoke-Render -Method GET -Path "/key-value/$($redis.id)/connection-info"
 $redisUrl = $redisInfo.internalConnectionString
+}
 
 # ---------------------------------------------------------------- planner
 # An externally hosted planner (local GNN + tunnel) skips the Render planner
@@ -394,8 +424,10 @@ if (-not $SkipDeployWait) {
 
 Write-Host ""
 Write-Host "Render backend: $backendUrl" -ForegroundColor Green
-Write-Host "Render planner: $plannerUrl (private)" -ForegroundColor Green
-Write-Host "Postgres:       $($pg.id)" -ForegroundColor Green
-Write-Host "Key Value:      $($redis.id)" -ForegroundColor Green
+Write-Host "Planner:        $plannerUrl" -ForegroundColor Green
+Write-Host "Postgres:       $(if ($pg) { $pg.id } else { 'external (QTRUST_EXTERNAL_PG_URL)' })" -ForegroundColor Green
+Write-Host "Key Value:      $(if ($redis) { $redis.id } else { 'external/none (QTRUST_EXTERNAL_REDIS_URL)' })" -ForegroundColor Green
 Write-Host ""
-Write-Host "Next: deploy frontend/ to Vercel and set NEXT_PUBLIC_QTRUST_API_URL=$backendUrl" -ForegroundColor Yellow
+Write-Host "Next: point the Vercel env vars at the backend and redeploy the frontend:" -ForegroundColor Yellow
+Write-Host "  QTRUST_BACKEND_URL=$backendUrl" -ForegroundColor Yellow
+Write-Host "  NEXT_PUBLIC_QTRUST_API_URL=$backendUrl" -ForegroundColor Yellow
