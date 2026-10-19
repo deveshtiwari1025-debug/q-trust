@@ -121,12 +121,17 @@ function Invoke-Render {
   try {
     return Invoke-RestMethod @requestArgs
   } catch {
-    $detail = $_.Exception.Message
-    try {
-      $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
-      $detail = $reader.ReadToEnd()
-    } catch { }
-    throw "Render $Method $Path failed: $detail"
+    $status = $null
+    try { $status = [int]$_.Exception.Response.StatusCode } catch { }
+    $detail = $_.ErrorDetails.Message
+    if ([string]::IsNullOrWhiteSpace($detail)) {
+      try {
+        $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+        $detail = $reader.ReadToEnd()
+      } catch { }
+    }
+    if ([string]::IsNullOrWhiteSpace($detail)) { $detail = $_.Exception.Message }
+    throw "Render $Method $Path failed (HTTP $status): $detail"
   }
 }
 
@@ -316,7 +321,7 @@ if ($planner.serviceDetails.url) { $plannerUrl = $planner.serviceDetails.url.Tri
 # ---------------------------------------------------------------- backend
 Write-Host "==> Backend web service" -ForegroundColor Cyan
 $publicUrl = $envMap["QTRUST_PUBLIC_URL"]
-if ([string]::IsNullOrWhiteSpace($publicUrl) -or $publicUrl -match 'localhost') {
+if ([string]::IsNullOrWhiteSpace($publicUrl) -or $publicUrl -match 'localhost|trycloudflare\.com') {
   $publicUrl = "https://qtrust-backend.onrender.com"
 }
 $scanRoot = $envMap["QTRUST_SCAN_ALLOWED_ROOTS"]
