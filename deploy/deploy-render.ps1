@@ -12,19 +12,36 @@
 
   Usage:
     pwsh ./deploy/deploy-render.ps1 -Plan starter -Region oregon
+    pwsh ./deploy/deploy-render.ps1 -Plan free -FreeTier
+
+  The source repo defaults to QTRUST_GITHUB_REPO_URL in .env, then to the
+  upstream public repo. Point it at a repo that contains the local deploy
+  fixes (backend/Dockerfile schema copy, render.yaml, deploy scripts), for
+  example with QTRUST_GITHUB_REPO_URL=https://github.com/<you>/q-trust.
+
+  -FreeTier keeps the deployment compatible with Render's free plan: no
+  persistent disk (evidence chain lives in the container filesystem) and the
+  planner runs as an API-key protected public web service instead of a
+  private service.
 
   Cost warning: private services, persistent disks, and paid Postgres/Key
-  Value plans are billed by Render. Use -Plan free only for a throwaway demo
-  (free web services sleep, free Postgres expires, and private services are
-  not available on the free plan).
+  Value plans are billed by Render. Use -Plan free for a throwaway demo
+  (free web services sleep, free databases expire, and evidence is ephemeral).
 #>
 [CmdletBinding()]
 param(
   [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path,
   [ValidateSet("free", "starter", "standard")][string]$Plan = "starter",
   [ValidateSet("oregon", "ohio", "virginia", "frankfurt", "singapore")][string]$Region = "oregon",
-  [string]$RepoUrl = "https://github.com/humoge7502/q-trust",
+  # Repository Render builds from. Defaults to QTRUST_GITHUB_REPO_URL in .env,
+  # then to the upstream public repo (which does NOT contain the local deploy
+  # fixes, so prefer setting QTRUST_GITHUB_REPO_URL or passing -RepoUrl).
+  [string]$RepoUrl = "",
   [string]$Branch = "main",
+  # Free tier has no persistent disks and no private services. This switch
+  # keeps the evidence chain in the container filesystem and exposes the
+  # planner as a public web service (still API-key protected).
+  [switch]$FreeTier,
   [switch]$SkipDeployWait
 )
 
@@ -47,7 +64,7 @@ function Read-DotEnv([string]$Path) {
 }
 
 function Set-EnvValue([string]$Path, [string]$Key, [string]$Value) {
-  $lines = @(Get-Content -LiteralPath $Path)
+  $lines = @([IO.File]::ReadAllLines($Path))
   $found = $false
   $escapedKey = [regex]::Escape($Key)
   for ($i = 0; $i -lt $lines.Count; $i++) {
@@ -57,7 +74,7 @@ function Set-EnvValue([string]$Path, [string]$Key, [string]$Value) {
     }
   }
   if (-not $found) { $lines += "$Key=$Value" }
-  Set-Content -LiteralPath $Path -Value $lines -Encoding utf8
+  [IO.File]::WriteAllLines($Path, $lines, (New-Object System.Text.UTF8Encoding($false)))
 }
 
 function Assert-Filled([hashtable]$Map, [string]$Key) {
@@ -143,6 +160,12 @@ if ([string]::IsNullOrWhiteSpace($script:renderKey) -or $script:renderKey -match
 if ([string]::IsNullOrWhiteSpace($script:renderKey)) {
   throw "Set RENDER_API_KEY in .env (Render Dashboard -> Account Settings -> API Keys)."
 }
+if ([string]::IsNullOrWhiteSpace($RepoUrl)) { $RepoUrl = $envMap["QTRUST_GITHUB_REPO_URL"] }
+if ([string]::IsNullOrWhiteSpace($RepoUrl)) {
+  $RepoUrl = "https://github.com/humoge7502/q-trust"
+  Write-Warning "No QTRUST_GITHUB_REPO_URL in .env and no -RepoUrl given; falling back to upstream $RepoUrl, which lacks the local deploy fixes."
+}
+Write-Host "==> Source repo: $RepoUrl (branch $Branch)" -ForegroundColor Cyan
 foreach ($key in @(
   "QTRUST_RELAYER_PRIVATE_KEY", "QTRUST_PLANNER_API_KEY", "QTRUST_API_KEYS",
   "QTRUST_WEBHOOK_ENC_KEY", "QTRUST_VC_ISSUER_KEY", "QTRUST_ASSET_REGISTRY_ADDRESS",
@@ -200,11 +223,16 @@ $redisInfo = Invoke-Render -Method GET -Path "/key-value/$($redis.id)/connection
 $redisUrl = $redisInfo.internalConnectionString
 
 # ---------------------------------------------------------------- planner
-Write-Host "==> Planner private service" -ForegroundColor Cyan
+# Private services are not available on the free plan, so free tier exposes
+# the planner as a web service. It stays protected by QTRUST_PLANNER_API_KEY
+# (the backend sends x-api-key on every planner call).
+$plannerType = if ($FreeTier) { "web_service" } else { "private_service" }
+$plannerLabel = if ($FreeTier) { "web service (API-key protected)" } else { "private service" }
+Write-Host "==> Planner $plannerLabel" -ForegroundColor Cyan
 $planner = Get-ByName "/services" "qtrust-planner"
 if (-not $planner) {
   $planner = Invoke-Render -Method POST -Path "/services" -Body @{
-    type = "private_service"
+    type = $plannerType
     name = "qtrust-planner"
     ownerId = $ownerId
     repo = $RepoUrl
@@ -238,7 +266,9 @@ if (-not $planner) {
   ) | Out-Null
 }
 
-# Private services get an internal URL such as http://qtrust-planner:8000.
+# Private services get an internal URL such as http://qtrust-planner:8000;
+# free-tier web services get a public https://* onrender.com URL (API-key
+# protected at the application layer).
 $plannerUrl = "http://qtrust-planner:8000"
 if ($planner.serviceDetails.url) { $plannerUrl = $planner.serviceDetails.url.TrimEnd("/") }
 
@@ -250,6 +280,9 @@ if ([string]::IsNullOrWhiteSpace($publicUrl) -or $publicUrl -match 'localhost') 
 }
 $scanRoot = $envMap["QTRUST_SCAN_ALLOWED_ROOTS"]
 if ([string]::IsNullOrWhiteSpace($scanRoot)) { $scanRoot = "/workspace/projects" }
+# Free tier cannot attach disks; keep the evidence chain in the (ephemeral)
+# container filesystem instead. Paid plans use the persistent disk.
+$dataDir = if ($FreeTier) { "/tmp/qtrust" } else { "/var/lib/qtrust" }
 
 $backendEnv = @(
   @{ key = "NODE_ENV"; value = "production" },
@@ -263,8 +296,8 @@ $backendEnv = @(
   @{ key = "QTRUST_CORS_ORIGINS"; value = $envMap["QTRUST_CORS_ORIGINS"] },
   @{ key = "QTRUST_SCAN_ALLOWED_ROOTS"; value = $scanRoot },
   @{ key = "QTRUST_SCAN_CONTAINER_ROOT"; value = "/workspace/projects" },
-  @{ key = "QTRUST_DATA_DIR"; value = "/var/lib/qtrust" },
-  @{ key = "QTRUST_EVIDENCE_DB_PATH"; value = "/var/lib/qtrust/evidence_chain.jsonl" },
+  @{ key = "QTRUST_DATA_DIR"; value = $dataDir },
+  @{ key = "QTRUST_EVIDENCE_DB_PATH"; value = "$dataDir/evidence_chain.jsonl" },
   @{ key = "QTRUST_PLANNER_URL"; value = $plannerUrl },
   @{ key = "QTRUST_PLANNER_API_KEY"; value = $envMap["QTRUST_PLANNER_API_KEY"] },
   @{ key = "QTRUST_REDIS_URL"; value = $redisUrl },
@@ -284,6 +317,25 @@ $backendEnv = @(
   @{ key = "QTRUST_SENTRY_DSN"; value = "" }
 )
 
+$backendDetails = @{
+  runtime = "docker"
+  plan = $Plan
+  region = $Region
+  healthCheckPath = "/health"
+  numInstances = 1
+  envSpecificDetails = @{
+    dockerContext = "."
+    dockerfilePath = "backend/Dockerfile"
+  }
+}
+if (-not $FreeTier) {
+  $backendDetails["disk"] = @{
+    name = "qtrust-evidence"
+    mountPath = "/var/lib/qtrust"
+    sizeGB = 1
+  }
+}
+
 $backend = Get-ByName "/services" "qtrust-backend"
 if (-not $backend) {
   $backend = Invoke-Render -Method POST -Path "/services" -Body @{
@@ -294,22 +346,7 @@ if (-not $backend) {
     branch = $Branch
     autoDeployTrigger = "off"
     envVars = $backendEnv
-    serviceDetails = @{
-      runtime = "docker"
-      plan = $Plan
-      region = $Region
-      healthCheckPath = "/health"
-      numInstances = 1
-      disk = @{
-        name = "qtrust-evidence"
-        mountPath = "/var/lib/qtrust"
-        sizeGB = 1
-      }
-      envSpecificDetails = @{
-        dockerContext = "."
-        dockerfilePath = "backend/Dockerfile"
-      }
-    }
+    serviceDetails = $backendDetails
   }
 } else {
   Write-Host "    reusing $($backend.id)"
