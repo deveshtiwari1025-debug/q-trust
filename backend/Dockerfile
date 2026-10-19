@@ -67,12 +67,16 @@ RUN groupadd -r qtrust && useradd -r -g qtrust -m qtrust
 # non-root runtime user can persist /var/lib/qtrust/evidence_chain.jsonl
 # (previously mkdir failed with EACCES and the chain silently degraded to
 # in-memory only, losing all evidence on restart).
-RUN mkdir -p /var/lib/qtrust && chown qtrust:qtrust /var/lib/qtrust
+# The scan root exists even when no host volume is mounted (Render deploys).
+RUN mkdir -p /var/lib/qtrust /workspace/projects \
+    && chown -R qtrust:qtrust /var/lib/qtrust /workspace/projects
 
 # Copy PRODUCTION node_modules and built JS only — no devDependencies in the
 # runtime image (audit M-8), no source code.
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
+# tsc only emits .js; the indexer reads schema.sql at runtime from dist/db.
+COPY backend/src/db/schema.sql ./dist/db/schema.sql
 COPY --from=build /app/package.json ./package.json
 COPY backend/scripts/run_inspector.py ./scripts/run_inspector.py
 
