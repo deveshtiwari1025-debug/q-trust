@@ -235,3 +235,6 @@ showcase/*.sarif
 deploy/logs/
 frontend/.vercel/
 .vercel/
+
+# Neon agent-skills metadata written by tooling; not part of the app
+frontend/skills-lock.json

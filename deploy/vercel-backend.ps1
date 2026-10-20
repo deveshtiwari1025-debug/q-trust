@@ -49,6 +49,13 @@ function Read-EnvFile {
     $idx = $line.IndexOf('=')
     $key = $line.Substring(0, $idx).Trim()
     $value = $line.Substring($idx + 1).Trim()
+    # .env files commonly quote values (for example DATABASE_URL, which
+    # contains & and ?). Vercel stores the literal string we send, so strip
+    # exactly one matching quote pair. Without this, pg receives a connection
+    # string wrapped in quotes and fails with ENOTFOUND on every hosted read.
+    if ($value.Length -ge 2 -and (($value.StartsWith('"') -and $value.EndsWith('"')) -or ($value.StartsWith("'") -and $value.EndsWith("'")))) {
+      $value = $value.Substring(1, $value.Length - 2)
+    }
     if ($key) { $map[$key] = $value }
   }
   return $map

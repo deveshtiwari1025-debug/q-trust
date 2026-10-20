@@ -17,6 +17,10 @@ import { StatusPill, type StatusTone } from "@/components/ui/status-pill";
 import { ErrorState } from "@/components/ui/state";
 import { Button } from "@/components/ui/button";
 import SideChannelPanel from "@/components/side-channel-panel";
+import { PlanningPanel } from "@/components/planning-panel";
+import QuantumThreatPanel from "@/components/quantum-threat-panel";
+import AnomalyPanel from "@/components/anomaly-panel";
+import RLPlanViewer from "@/components/rl-plan-viewer";
 import { OperatorAccessInline, OperatorAccessPanel } from "@/components/operator-access";
 import { ShieldCheckIcon, XCircleIcon, ClockIcon } from "@/app/icons";
 
@@ -123,7 +127,7 @@ interface EvidenceVerifyResult {
 /*  Tab configuration                                                          */
 /* -------------------------------------------------------------------------- */
 
-type TabId = "scan" | "risk" | "compliance" | "roadmap" | "evidence" | "sidechannel";
+type TabId = "scan" | "risk" | "compliance" | "roadmap" | "evidence" | "sidechannel" | "planner" | "lab";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "scan", label: "Scan" },
@@ -132,11 +136,24 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "roadmap", label: "Roadmap" },
   { id: "evidence", label: "Evidence" },
   { id: "sidechannel", label: "Side Channel" },
+  { id: "planner", label: "AI Planner" },
+  { id: "lab", label: "AI & GPU Lab" },
 ];
 
 const COMPLIANCE_FRAMEWORKS = [
   { value: "NIST", label: "NIST SP 800-131A" },
   { value: "CNSA", label: "CNSA 2.0" },
+] as const;
+
+/**
+ * Directories mounted into the local scanner container. Exposed as one-click
+ * presets so a first-time visitor does not have to guess a server-side path.
+ */
+const SAMPLE_TARGETS = [
+  { label: "Backend", path: "/workspace/projects/backend/src" },
+  { label: "Frontend", path: "/workspace/projects/frontend/src" },
+  { label: "Contracts", path: "/workspace/projects/contracts/src" },
+  { label: "Inspector", path: "/workspace/projects/inspector/qtrust_inspector" },
 ] as const;
 
 /* -------------------------------------------------------------------------- */
@@ -332,7 +349,9 @@ function buildSarif(result: ScanResult): Record<string, unknown> {
 
 export function ScannerDashboard() {
   /* ---- Scan state ---- */
-  const [target, setTarget] = useState("");
+  // Pre-filled with a mounted demo target so the first click produces a real
+  // scan; visitors can pick another sample or type any allowed path.
+  const [target, setTarget] = useState("/workspace/projects/inspector/qtrust_inspector");
   const [scanSource, setScanSource] = useState(true);
   const [scanManifest, setScanManifest] = useState(true);
   const [scanLoading, setScanLoading] = useState(false);
@@ -367,10 +386,11 @@ export function ScannerDashboard() {
   const [exportLoading, setExportLoading] = useState<string | null>(null);
 
   /*
-   * Operator access: `/v1/scan/*`, `/v1/roadmap/generate` and
-   * `/v1/evidence/create` are privileged routes — the same-origin proxy refuses
-   * them unless the caller presents its own API key (lib/api-route-policy.ts).
-   * When that happens we surface an operator prompt instead of a bare error.
+   * Operator access fallback: `/v1/scan/*`, `/v1/roadmap/generate` and
+   * `/v1/evidence/create` are public-compute via the same-origin proxy (the
+   * server key is attached), so they work for anonymous visitors. If the proxy
+   * ever refuses one — e.g. a deployment configured without a server key in
+   * production — we surface an operator prompt instead of a bare error.
    */
   const [operatorEndpoint, setOperatorEndpoint] = useState<string | null>(null);
 
@@ -604,11 +624,25 @@ export function ScannerDashboard() {
               <input
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
-                placeholder="e.g. /opt/app or ./src"
+                placeholder="/workspace/projects/backend/src"
                 className="mt-1 block w-full rounded-lg border border-border px-3 py-2 font-mono text-sm"
                 onKeyDown={(e) => e.key === "Enter" && void runScan()}
               />
             </label>
+          </div>
+
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+            <span>Try a sample:</span>
+            {SAMPLE_TARGETS.map((sample) => (
+              <button
+                key={sample.path}
+                type="button"
+                onClick={() => setTarget(sample.path)}
+                className="rounded-full border border-border px-2.5 py-1 font-medium text-foreground transition hover:border-qtrust-600 hover:text-qtrust-600"
+              >
+                {sample.label}
+              </button>
+            ))}
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-4">
@@ -1245,6 +1279,22 @@ export function ScannerDashboard() {
       <Tabs.Content value="sidechannel">
         <div className="max-w-xl">
           <SideChannelPanel />
+        </div>
+      </Tabs.Content>
+
+      {/* ==================== AI PLANNER TAB ==================== */}
+      <Tabs.Content value="planner">
+        <div className="max-w-3xl">
+          <PlanningPanel />
+        </div>
+      </Tabs.Content>
+
+      {/* ==================== AI & GPU LAB TAB ==================== */}
+      <Tabs.Content value="lab">
+        <div className="space-y-6">
+          <QuantumThreatPanel />
+          <AnomalyPanel />
+          <RLPlanViewer />
         </div>
       </Tabs.Content>
     </Tabs.Root>

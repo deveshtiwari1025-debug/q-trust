@@ -320,9 +320,6 @@ async function backfill(spec: EventSpec): Promise<void> {
   console.log(`Indexer: ${spec.key} caught up to block ${head}`);
 }
 
-/** Number of block confirmations to wait before treating an event as final. */
-const CONFIRMATIONS = Number(process.env.QTRUST_INDEXER_CONFIRMATIONS ?? 12);
-
 /** Minimum interval between reorg checks triggered by live polls (ms). */
 const REORG_CHECK_INTERVAL_MS = Number(process.env.QTRUST_INDEXER_REORG_CHECK_INTERVAL_MS ?? 30_000);
 let lastReorgCheckAt = 0;
@@ -341,6 +338,11 @@ async function watchLive(spec: EventSpec): Promise<void> {
   const unwatch = await getPublicClient().watchEvent({
     address,
     event: parseAbiItem(spec.event) as AbiEvent,
+    // HTTP transports have no push channel: without poll:true viem installs a
+    // filter subscription (eth_newFilter) that many public RPCs silently drop,
+    // so newly mined events were only indexed on the next process restart.
+    poll: true,
+    pollingInterval: Number(process.env.QTRUST_INDEXER_POLL_MS ?? 4000),
     onLogs: async (logs) => {
       // Reorg check on each poll — verify recently indexed blocks are still
       // canonical; purge + rewind if the chain reorganized underneath us.
@@ -364,27 +366,14 @@ async function watchLive(spec: EventSpec): Promise<void> {
           console.warn("Indexer: reorg check failed for", spec.key, ":", err);
         }
       }
-      let head: bigint | null = null;
-      if (CONFIRMATIONS > 0) {
-        // Guarded: an RPC outage here must not reject inside the watcher
-        // callback and crash the process (audit Critical #10).
-        try {
-          head = await getPublicClient().getBlockNumber();
-        } catch (err) {
-          // Args passed separately (not interpolated) — semgrep unsafe-formatstring.
-          console.warn("Indexer: getBlockNumber failed for", spec.key, "— skipping batch:", err);
-          return;
-        }
-      }
+      // Process every delivered log immediately. Reorg safety comes from the
+      // periodic detectAndHandleReorg() check above, which purges forked rows
+      // and re-runs backfill from the fork block. The previous code skipped
+      // logs inside the confirmation window and relied on "backfill on next
+      // restart" to process them — but viem's watcher is forward-only, so
+      // those events were never delivered again and never indexed.
       for (const log of logs) {
         const blockNum = log.blockNumber ?? 0n;
-        // Wait for N confirmations before processing to handle re-orgs.
-        if (head !== null) {
-          if (head - blockNum < BigInt(CONFIRMATIONS)) {
-            // Not enough confirmations yet — skip, backfill will catch it on next restart.
-            continue;
-          }
-        }
         try {
           await applyLog(spec, log as Log);
           if (log.blockNumber && log.blockHash) {
@@ -467,16 +456,16 @@ export async function startIndexer(): Promise<void> {
 export async function querySummary(org: string) {
   if (!pool) return null;
   const [assets, migrations, audits] = await Promise.all([
-    pool.query("SELECT COUNT(*)::int AS count FROM assets WHERE org_did=$1", [org]),
+    pool.query("SELECT COUNT(*)::int AS count FROM assets WHERE lower(org_did)=lower($1)", [org]),
     pool.query(
       `SELECT COUNT(*)::int AS total,
               COUNT(*) FILTER (WHERE verified)::int AS verified,
               COUNT(*) FILTER (WHERE NOT verified)::int AS unverified
-       FROM migrations WHERE org_did=$1`,
+       FROM migrations WHERE lower(org_did)=lower($1)`,
       [org],
     ),
     pool.query(
-      "SELECT result, timestamp FROM audits WHERE org_did=$1 ORDER BY timestamp DESC LIMIT 1",
+      "SELECT result, timestamp FROM audits WHERE lower(org_did)=lower($1) ORDER BY timestamp DESC LIMIT 1",
       [org],
     ),
   ]);
@@ -493,7 +482,7 @@ export async function queryAssets(
   limit = 50,
 ): Promise<{ rows: unknown[]; total: number } | null> {
   if (!pool) return null;
-  const where = org ? "WHERE org_did=$1" : "";
+  const where = org ? "WHERE lower(org_did)=lower($1)" : "";
   const params = org ? [org, limit, offset] : [limit, offset];
   const [rows, total] = await Promise.all([
     pool.query(
@@ -512,7 +501,7 @@ export async function queryAttestations(
   limit = 50,
 ): Promise<{ rows: unknown[]; total: number } | null> {
   if (!pool) return null;
-  const where = vendor ? "WHERE vendor_did=$1" : "";
+  const where = vendor ? "WHERE lower(vendor_did)=lower($1)" : "";
   const params = vendor ? [vendor, limit, offset] : [limit, offset];
   const [rows, total] = await Promise.all([
     pool.query(
@@ -531,7 +520,7 @@ export async function queryMigrations(
   limit = 50,
 ): Promise<{ rows: unknown[]; total: number } | null> {
   if (!pool) return null;
-  const where = org ? "WHERE org_did=$1" : "";
+  const where = org ? "WHERE lower(org_did)=lower($1)" : "";
   const params = org ? [org, limit, offset] : [limit, offset];
   const [rows, total] = await Promise.all([
     pool.query(

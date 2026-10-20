@@ -8,12 +8,13 @@ _Last updated: 2026-10-20_
 |---|---|---|
 | Frontend | Vercel (`q-trust`, team `devesh-tiwari-p-projects1`) | https://q-trust-nu.vercel.app |
 | Backend API | **Vercel serverless** (`qtrust-backend`) — Fastify bridge at `backend/api/index.mjs` | https://qtrust-backend.vercel.app/api |
-| Indexer | Docker on this machine (`qtrust-api`), writing to the hosted Postgres | runs inside the local API container |
-| Python scanner + evidence chain | Docker on this machine, exposed through a Cloudflare quick tunnel; the hosted API proxies `/v1/scan/*` and `/v1/evidence/*` there | https://sculpture-stylus-ultimate-burning.trycloudflare.com |
-| GNN planner (v3, CPU) | Docker on this machine (`qtrust-planner:2.2.0`), exposed with a second Cloudflare quick tunnel | https://accordingly-thumbzilla-following-intake.trycloudflare.com |
-| Postgres (hosted) | Neon, provisioned through the Vercel Marketplace | resource `quiet-sound-15608005`; pooled URL in `frontend/.env.local` `DATABASE_URL`, unpooled in `.env` `QTRUST_EXTERNAL_PG_URL` |
+| Indexer | Docker on this machine (`qtrust-api`), writing to hosted Postgres | polls every 4 s; reorg check still runs |
+| Python scanner + evidence chain | Docker on this machine, exposed through a Cloudflare quick tunnel; the hosted API proxies `/v1/scan/*` and `/v1/evidence/*` there | see `QTRUST_SCANNER_PROXY_URL` in `.env` |
+| ML bridge (side-channel, anomaly, RL, quantum) | Same `qtrust-api` container, CPU-only torch + copied model weights (`/opt/qtrust-models`) | hosted API proxies `/v1/gpu/*` to it |
+| GNN planner (v3 + RL) | Docker on this machine (`qtrust-planner:2.2.0`), exposed with a second Cloudflare quick tunnel | see `QTRUST_PLANNER_TUNNEL_URL` in `.env` |
+| Postgres (hosted) | Neon, provisioned through the Vercel Marketplace | resource `quiet-sound-15608005`; pooled URL in `frontend/.env.local`, unpooled in `.env` |
 | Postgres (local) | Docker on this machine (fallback/demo only) | `qtrust-postgres` (127.0.0.1:5433) |
-| Redis | Docker on this machine (local API only; not used by the hosted API) | `qtrust-redis` (127.0.0.1:6379) |
+| Redis | Docker on this machine (local API only; the hosted API uses an in-memory webhook fallback) | `qtrust-redis` (127.0.0.1:6379) |
 | Contracts | Base Sepolia (chain 84532) | see `deploy/logs/contracts-deploy.log` and `.env` |
 
 Vercel Deployment Protection is **disabled** for the `q-trust` project so the
@@ -28,13 +29,31 @@ site is publicly reachable.
   `{"source":"/api/:path*","destination":"/api/index?__p=:path*"}`.
 - Body parsing is disabled (`config.api.bodyParser = false`) so Fastify reads
   the raw request stream itself.
-- `QTRUST_SCANNER_PROXY_URL` points at the local API tunnel; the hosted API
-  forwards `/v1/scan/*` and `/v1/evidence/*` there (the caller's `x-api-key` is
-  preserved, so the local API enforces the same policy). Everything else runs
-  on Vercel, including planner calls through `QTRUST_PLANNER_URL`.
+- `QTRUST_SCANNER_PROXY_URL` points at the local API tunnel. The hosted API
+  forwards `/v1/scan/`, `/v1/evidence/`, and `/v1/gpu/` there, preserving the
+  caller's `x-api-key`, so the local API enforces the same policy. Everything
+  else runs on Vercel, including planner calls through `QTRUST_PLANNER_URL`.
 - The local API container was switched to the hosted Postgres with
   `docker-compose.override.yml` (`QTRUST_COMPOSE_PG_URL` in `.env`), so one
   Neon database backs both the local indexer and the deployed API.
+- **Public compute for anonymous visitors.** The frontend proxy
+  (`frontend/src/lib/api-route-policy.ts`) classifies scanner, evidence
+  creation, Roadmap sync, planner, and GPU calls as `public-compute` and
+  attaches the server key on the server side. Operator-only routes
+  (`/v1/write/`, `/v1/relay/`, `/v1/webhooks/`, credential issuance) still
+  require the caller's own key — this protects relayer gas and on-chain writes.
+- **API docs are public** (`QTRUST_DOCS_PUBLIC=true`), so the header's
+  "API docs" link works for everyone.
+- **Indexer:** `watchEvent` now uses `poll: true` (HTTP transports have no push
+  channel) and processes delivered logs immediately; reorg safety comes from the
+  periodic `detectAndHandleReorg()` check. Address comparisons in read queries
+  are case-insensitive (`lower(org_did) = lower($1)`), because contract events
+  arrive checksummed while callers pass lowercase addresses.
+- **CSP:** production `script-src` includes `'unsafe-inline'`. Next.js always
+  emits inline bootstrap/RSC-streaming scripts; without it every page stayed on
+  its loading skeleton because React never hydrated. The policy still locks
+  down `object-src`, `base-uri`, `frame-ancestors`, and an explicit
+  `connect-src` that includes the configured Base Sepolia RPC origin.
 - Provisioning/redeploying the hosted API:
 
   ```
@@ -46,27 +65,58 @@ site is publicly reachable.
   `QTRUST_*` variable from `.env` with hosted overrides, writes
   `backend/.vercel/project.json`, and runs `vercel deploy --prod`.
 
-### Smoke test (passed)
+### Keeping the local half alive
+
+`deploy/ensure-local-stack.ps1` is a safe-to-rerun watchdog:
+
+1. starts Docker Desktop if it is not running;
+2. ensures `postgres`, `redis`, `api`, and `planner` containers are up;
+3. ensures both `cloudflared` quick tunnels exist (downloads `cloudflared` to
+   `%LOCALAPPDATA%\qtrust\bin` on first use);
+4. if a tunnel URL changed, updates `.env` and re-syncs + redeploys the Vercel
+   backend automatically.
 
 ```
-powershell -File deploy/smoke-test.ps1 `
-  -ApiUrl https://qtrust-backend.vercel.app/api `
-  -FrontendUrl https://q-trust-nu.vercel.app `
-  -ScanDirectory /workspace/projects/backend/src
+powershell -File deploy/ensure-local-stack.ps1                    # check once
+powershell -File deploy/ensure-local-stack.ps1 -InstallStartup     # per-user, no admin
+powershell -File deploy/ensure-local-stack.ps1 -InstallTask        # scheduled task, needs admin
 ```
 
-All checks passed: API health (chain 84532, relayer
-`0xE610569aE0352DC3262419bb051a86145f52875c`), authenticated `/docs/json`,
-planner plan (v3), scanner through the local tunnel, frontend HTTP 200.
-Browser path also verified: `GET /api/health` through the frontend proxy,
-`POST /api/v1/scan/source` with `x-qtrust-api-key`, and the rebuilt CSP now
-allow-lists `https://qtrust-backend.vercel.app/api`.
+The installed Startup-folder watcher (`QTrustLocalStack.vbs`) runs hidden at
+logon and repeats every five minutes; `-InstallTask` is only an option for an
+elevated shell. Logs: `deploy/logs/stack.log`. Container restart policies are
+`unless-stopped`.
 
-The Vercel `/api/*` proxy intentionally **does not** attach the server-side
-key to operator routes (planner/scanner/relayer/webhooks). Those require the
-caller's own key in the `x-qtrust-api-key` header from the operator panel;
-anonymous planner POSTs through the dashboard proxy return 403
-`operator_key_required`. This is by design (`frontend/src/lib/api-route-policy`).
+### Demo records (seeded and indexed)
+
+`node backend/scripts/seed-demo-records.mjs` is idempotent: it reuses existing
+CBOM documents, skips hashes already registered, records an RSA-2048 →
+ML-KEM-768 migration, waits for the indexer, and writes
+`deploy/demo-records.json` plus `frontend/src/lib/demo-records.json` (the home
+page imports the latter to render its "Live on-chain records" strip, so redeploy
+the frontend after reseeding).
+
+| Target | Asset ID | Metadata |
+|---|---|---|
+| `/workspace/projects/inspector/qtrust_inspector` (23 findings) | `0x125fad1d7f435ea1dfeb014bdcbbbe0636fe7043b1e4e4ac90975768e3d1a349` | `/demo/cbom-inspector.json` |
+| `/workspace/projects/planner/qtrust_planner` (7 findings) | `0xd30d41f474522329945e5927ba1e28c0ce376fba80942b1e80b7cdc3c74f7cac` | `/demo/cbom-planner.json` |
+| `/workspace/projects/backend/src` (0 findings, clean) | `0xbc5464cb3f08b7984fcf6392a0ab12f01759ca3a4f654f6b070a2e3d2f7eddd7` | `/demo/cbom-backend.json` |
+
+Migration record: `0xec0e55de99ddcb18b9a394be9f704c703e7d5ade53b29e16c4fc0a60264d3984`
+(tx `0x014e6d93c8ded0e535ebecf11985736f867ea0708a949983c5b3ad16a794fe8e`).
+
+### Verification
+
+```
+powershell -File deploy/smoke-test.ps1 -RepoRoot <repo>   # API + planner + scanner + frontend
+node frontend/scripts/browser-check.mjs                   # live anonymous browser flows
+npm test --prefix backend                                  # 108 tests
+npm test --prefix frontend                                 # 138 tests
+```
+
+The browser check covers: home loads and links to real records, `/v/<id>`
+renders VALID/REVOKED, `/scanner` runs a full scan and reaches the AI planner
+and GPU lab panels, and `/dashboard` / `/vendors` load without server errors.
 
 ## Base Sepolia contracts
 
@@ -89,90 +139,39 @@ renounced.
 ## Hosting blockers (checked 2026-10-20)
 
 - **Render:** every service creation returns HTTP 402 ("Payment information is
-  required") — including free web services and free databases. No API key or
-  browser session for a billed workspace exists on this machine.
-- **Hugging Face Docker Spaces:** creation now returns HTTP 402 as well —
-  "hosting Gradio and Docker Spaces on free cpu-basic requires a PRO
-  subscription". The available fine-grained token maps to account
-  `KRISHNAPURI` (owner of the static `q-trust-scanner` Space) but the account
-  is not PRO, so the no-card Docker Space fallback is closed.
+  required") — including free web services and free databases.
+- **Hugging Face Docker Spaces:** creation returns HTTP 402 — free Docker
+  Spaces require a PRO subscription.
 
 The Vercel serverless deployment is the no-card path that works today.
 
-## Remaining Render migration assets
-
-- **Source repo:** `https://github.com/deveshtiwari1025-debug/q-trust`
-  (public fork of `humoge7502/q-trust`; local `main` pushed through the latest
-  deploy commit). The fork is required because the available credentials have
-  no push access to the upstream repo.
-- **Render account:** created and verified under
-  `qtrust-render-c822318142@maxxspace.com` (temporary mailbox); API key is in
-  `.env` as `RENDER_API_KEY`. Workspace `My Workspace`
-  (`tea-dbb7bnnavr4c73d19i10`).
-- **Neon Postgres:** free plan, connected to the Vercel project; the local
-  indexer writes through `QTRUST_COMPOSE_PG_URL` (unpooled) and the hosted API
-  reads through the pooled `DATABASE_URL`.
-- **Redis:** not provisioned. The hosted API runs without Redis (webhook
-  subscriptions return 503 there); the local API keeps Redis for full parity.
-- **Deploy script:** `deploy/deploy-render.ps1` supports `-Plan free`,
-  `-FreeTier`, `-SkipRedis`, `-ExternalPlannerUrl`, `-ExternalPgUrl`,
-  `-ExternalRedisUrl`, `-RepoUrl`, and `-Branch`, with detailed HTTP error
-  reporting.
-
-If a Render workspace with billing becomes available, run:
-
-```
-powershell -File deploy/deploy-render.ps1 `
-  -Plan free -FreeTier -SkipRedis `
-  -RepoUrl https://github.com/deveshtiwari1025-debug/q-trust -Branch main `
-  -ExternalPlannerUrl <current planner tunnel URL>
-```
-
-then re-point the Vercel env vars (`QTRUST_BACKEND_URL`,
-`NEXT_PUBLIC_QTRUST_API_URL`) at the `onrender.com` URL and redeploy the
-frontend.
-
-## Planner sizing (measured)
-
-| Service | Idle memory |
-|---|---|
-| API + indexer | ~93 MB |
-| Planner (GNN v3, CPU) | ~462 MB |
-| Postgres | ~32 MB |
-| Redis | ~8 MB |
-
-A planner container constrained with `--memory=512m --memory-swap=512m`
-completed a 60-asset plan at 435–438 MiB with no OOM kill, so Render Free/
-Starter (512 MB) is viable for demo workloads; inference spikes above that are
-still possible. Render Standard (2 GB) remains the safe choice.
-
 ## Known limitations
 
-- **The local machine must stay on** for the indexer, the Python scanner,
-  the evidence chain, and the planner. If it goes offline, the hosted API keeps
-  serving RPC-backed reads and the last indexed data, while `/v1/scan/*`,
-  `/v1/evidence/*`, and `/v1/plans` fail (the hosted API returns 503 for
-  proxied scanner calls and a planner error otherwise).
-- **Tunnel URLs are not stable.** If `cloudflared` restarts, update
-  `QTRUST_SCANNER_PROXY_URL` and `QTRUST_PLANNER_URL` for the Vercel project
-  (rerun `deploy/vercel-backend.ps1` after updating `.env`) and redeploy the
-  hosted API.
+- **The local machine must stay on** for the indexer, Python scanner, evidence
+  chain, ML bridge, and planner. If it goes offline, the hosted API keeps
+  serving RPC-backed reads and the last indexed data; `/v1/scan/*`,
+  `/v1/evidence/*`, `/v1/gpu/*` return a proxy error and `/v1/plans` fails.
+  `deploy/ensure-local-stack.ps1` restarts the pieces after a reboot and
+  re-points Vercel when tunnel URLs change.
+- **Quick-tunnel URLs are not stable.** The watchdog updates `.env` and
+  redeploys the backend when they change; otherwise run
+  `deploy/vercel-backend.ps1` after editing the two tunnel variables.
 - **Serverless cold starts.** The first request after idle takes ~1–2 s while
   the Fastify app boots; `/tmp/qtrust` on Vercel is ephemeral (evidence is
   proxied to the local API, which keeps the durable chain).
 - **In-memory rate limiting on Vercel** (120 req/min per warm instance,
   `QTRUST_RATE_LIMIT_MAX`). No Redis-backed shared limits there.
+- **Webhook subscribers on Vercel** are held in memory per warm instance and
+  are lost on cold start. The local API uses Redis and is authoritative for
+  long-lived subscriptions.
 - **WalletConnect uses the public `demo` project ID** with
-  `NEXT_PUBLIC_QTRUST_ALLOW_DEMO_WALLETCONNECT=1`. Connections work but are
-  rate-limited. Create a project at https://cloud.walletconnect.com, then set
-  `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` and redeploy.
-- **No custom domain.** The Vercel URLs are the production entry points for
-  now.
-- **The temporary Render account uses a disposable email.** If it becomes the
-  permanent host, change the account email to one the user controls.
+  `NEXT_PUBLIC_QTRUST_ALLOW_DEMO_WALLETCONNECT=1`. Browser-extension wallets
+  work normally; WalletConnect pairing is rate-limited by the demo project.
+  Create a project at https://cloud.walletconnect.com, set
+  `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`, and redeploy.
+- **No custom domain.** The Vercel URLs are the production entry points.
 - **Shared secrets were rotated** after an accidental env dump in the local
   session log: API key, planner key, webhook encryption key, and VC issuer key.
   The Base Sepolia relayer/deployer keys were also visible in that log; they
   are testnet-only and the relayer cannot be rotated because
-  `DEFAULT_ADMIN_ROLE` was renounced. Rotate the API keys again and drop the
-  transition key from `QTRUST_API_KEYS`/`QTRUST_API_KEY` when convenient.
+  `DEFAULT_ADMIN_ROLE` was renounced.

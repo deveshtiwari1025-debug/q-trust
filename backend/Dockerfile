@@ -51,14 +51,25 @@ RUN apt-get update \
 # Install the inspector into a dedicated venv so `QTRUST_INSPECTOR_PYTHON`
 # resolves for any user (including the non-root runtime user below) without
 # violating PEP 668 via --break-system-packages.
+#
+# The optional ML extras (numpy + CPU-only torch) power the GPU-bridge
+# side-channel and anomaly models. CPU wheels run the sub-MB model files fine
+# and avoid the multi-GB CUDA wheel set. Model weights are copied to
+# /opt/qtrust-models before the source tree is discarded.
 COPY inspector/ /inspector/
 RUN python3 -m venv /opt/inspector-venv \
     && /opt/inspector-venv/bin/pip install --no-cache-dir /inspector \
+    && /opt/inspector-venv/bin/pip install --no-cache-dir numpy \
+    && /opt/inspector-venv/bin/pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
+    && mkdir -p /opt/qtrust-models \
+    && cp /inspector/anomaly_model.pt /inspector/side_channel_model.pt /inspector/side_channel_model_real.pt /opt/qtrust-models/ \
     && rm -rf /inspector
 
 EXPOSE 3001
 
 ENV QTRUST_INSPECTOR_PYTHON=/opt/inspector-venv/bin/python3
+ENV QTRUST_SIDE_CHANNEL_MODEL=/opt/qtrust-models/side_channel_model.pt
+ENV QTRUST_ANOMALY_MODEL=/opt/qtrust-models/anomaly_model.pt
 
 # Run as non-root for security
 RUN groupadd -r qtrust && useradd -r -g qtrust -m qtrust
@@ -78,7 +89,11 @@ COPY --from=build /app/dist ./dist
 # tsc only emits .js; the indexer reads schema.sql at runtime from dist/db.
 COPY backend/src/db/schema.sql ./dist/db/schema.sql
 COPY --from=build /app/package.json ./package.json
-COPY backend/scripts/run_inspector.py ./scripts/run_inspector.py
+COPY backend/scripts/run_inspector.py backend/scripts/gpu_bridge.py ./scripts/
+# Python-side planner utility package (quantum resource estimator) consumed by
+# the GPU bridge's `quantum-estimate` subcommand. The bridge resolves it from a
+# /planner directory at the container root, so it must be copied there.
+COPY planner/qtrust_planner /planner/qtrust_planner
 
 RUN chown -R qtrust:qtrust /app
 USER qtrust

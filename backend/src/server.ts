@@ -108,6 +108,12 @@ export async function buildServer(): Promise<FastifyInstance> {
   const rateLimitOptions = {
     max: Number(process.env.QTRUST_RATE_LIMIT_MAX) || 120,
     timeWindow: "1 minute",
+    // Per-route buckets. The default key is the caller IP only, which made
+    // every request from the shared tunnel count against the lowest route
+    // limit (scan was 30/min): ordinary page reads and health checks could
+    // exhaust the scan budget and trigger 429 storms through the tunnel.
+    keyGenerator: (request: { ip: string; url: string }) =>
+      `${request.ip}:${request.url.split("?")[0] ?? request.url}`,
     // Redis is shared across API replicas when explicitly configured. In
     // production a Redis storage error rejects the request rather than silently
     // disabling abuse protection; local development remains available during a
@@ -133,8 +139,10 @@ export async function buildServer(): Promise<FastifyInstance> {
 
   // REG-18: /docs (Swagger UI) and the raw OpenAPI JSON map the whole API
   // surface for anyone — in production they are gated behind the same API-key
-  // middleware. Local dev stays open so interactive docs work out of the box.
-  if (process.env.NODE_ENV === "production") {
+  // middleware. Set QTRUST_DOCS_PUBLIC=true to publish the reference instead
+  // (the frontend header links to it); local dev stays open either way.
+  const docsPublic = process.env.QTRUST_DOCS_PUBLIC === "true";
+  if (process.env.NODE_ENV === "production" && !docsPublic) {
     server.addHook("onRequest", async (request, reply) => {
       const url = request.url.split("?")[0];
       if (url === "/docs" || url.startsWith("/docs/") || url === "/documentation" || url.startsWith("/documentation/")) {
@@ -144,15 +152,31 @@ export async function buildServer(): Promise<FastifyInstance> {
     });
   }
 
-  // Hosted deployments keep the Python inspector and the persistent evidence
-  // chain on the operator machine. When QTRUST_SCANNER_PROXY_URL is set, the
-  // scanner/evidence routes are transparently forwarded there (the caller's
-  // API key is preserved so the upstream enforces the same policy).
-  const scannerProxy = (process.env.QTRUST_SCANNER_PROXY_URL ?? "").replace(/\/$/, "");
+  // Hosted deployments keep the Python inspector, the persistent evidence
+  // chain and the ML model server on the operator machine. When
+  // QTRUST_SCANNER_PROXY_URL is set, the scanner, evidence and GPU routes are
+  // transparently forwarded there (the caller's API key is preserved so the
+  // upstream enforces the same policy).
+  //
+  // Guard: only proxy from a hosted runtime. The local Docker API shares the
+  // same .env (which carries the public tunnel URL for the Vercel deploy), so
+  // without this check the local API would forward /v1/scan/* to its own
+  // public tunnel and loop back into itself until the rate limiter stops it.
+  const isHostedRuntime =
+    process.env.QTRUST_SERVERLESS === "1" || Boolean(process.env.VERCEL);
+  const scannerProxy = isHostedRuntime
+    ? (process.env.QTRUST_SCANNER_PROXY_URL ?? "").replace(/\/$/, "")
+    : "";
   if (scannerProxy) {
     server.addHook("preHandler", async (request, reply) => {
       const path = request.url.split("?")[0] ?? "";
-      if (!path.startsWith("/v1/scan/") && !path.startsWith("/v1/evidence/")) return;
+      if (
+        !path.startsWith("/v1/scan/") &&
+        !path.startsWith("/v1/evidence/") &&
+        !path.startsWith("/v1/gpu/")
+      ) {
+        return;
+      }
       try {
         const headers: Record<string, string> = { "content-type": "application/json", accept: "application/json" };
         const key = request.headers["x-api-key"];
