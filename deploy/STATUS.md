@@ -72,9 +72,15 @@ site is publicly reachable.
 1. starts Docker Desktop if it is not running;
 2. ensures `postgres`, `redis`, `api`, and `planner` containers are up;
 3. ensures both `cloudflared` quick tunnels exist (downloads `cloudflared` to
-   `%LOCALAPPDATA%\qtrust\bin` on first use);
+   `%LOCALAPPDATA%\qtrust\bin` on first use) with `--edge-ip-version 4`; forcing
+   IPv4 avoids the QUIC timeouts this network sees on Cloudflare's IPv6 edges;
 4. if a tunnel URL changed, updates `.env` and re-syncs + redeploys the Vercel
    backend automatically.
+
+A running tunnel is never killed just because one health probe returns 530/502:
+quick tunnels reconnect on the same URL, and restarting one changes the URL and
+costs a redeploy. The watchdog only starts a tunnel when no process for that
+port exists.
 
 ```
 powershell -File deploy/ensure-local-stack.ps1                    # check once
@@ -159,8 +165,9 @@ The Vercel serverless deployment is the no-card path that works today.
 - **Serverless cold starts.** The first request after idle takes ~1–2 s while
   the Fastify app boots; `/tmp/qtrust` on Vercel is ephemeral (evidence is
   proxied to the local API, which keeps the durable chain).
-- **In-memory rate limiting on Vercel** (120 req/min per warm instance,
-  `QTRUST_RATE_LIMIT_MAX`). No Redis-backed shared limits there.
+- **In-memory rate limiting on Vercel** (`QTRUST_RATE_LIMIT_MAX`, 600 req/min
+  per warm instance; keys are scoped per route so page reads cannot exhaust the
+  scan budget). No Redis-backed shared limits there.
 - **Webhook subscribers on Vercel** are held in memory per warm instance and
   are lost on cold start. The local API uses Redis and is authoritative for
   long-lived subscriptions.

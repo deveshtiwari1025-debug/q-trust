@@ -161,9 +161,10 @@ function Get-LogPathFromProcess {
   return $null
 }
 
-# A quick tunnel can keep its process alive after Cloudflare drops the
-# connection; the published URL then answers 530/502 forever. Treat that as
-# dead and restart, otherwise the hosted API keeps proxying to a dead origin.
+# Diagnostics only. A quick tunnel routinely answers 530 for a minute while it
+# re-registers its QUIC connection, then recovers on the *same* URL. Restarting
+# on the first failed probe changes the URL and forces a Vercel redeploy, which
+# is worse than the blip, so Ensure-Tunnel never kills a running process.
 function Test-TunnelUrl {
   param([string]$Url)
   if (-not $Url) { return $false }
