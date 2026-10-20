@@ -6,7 +6,7 @@ The Q-Trust launch film, built with the
 
 | File | What it is |
 |---|---|
-| `brag.mp4` | Rendered master — 1920x1080, 30 fps, 21.5 s, H.264 + AAC |
+| `brag.mp4` | Rendered master — 1920x1080, 30 fps, 21.5 s, H.264 + AAC, -18.7 LUFS integrated / -3.1 dBFS true peak |
 | `brag.jpg` | Poster frame (20.2 s, the light finale) |
 | `brag-plan.md` | Creative contract: narrative, scene timing, copy, audio direction |
 | `composition-brief.md` | Implementation brief for the composition |
