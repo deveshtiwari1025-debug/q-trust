@@ -54,7 +54,11 @@ site is publicly reachable.
   server-side. Verified locally: an anonymous proxied POST reaches signature
   validation and fails with `400 EIP-712 signature verification failed`,
   while `POST /v1/relay/migration` without a key still returns
-  `403 operator_key_required`.
+  `403 operator_key_required`. This is live on
+  https://q-trust-nu.vercel.app since the 2026-10-20 frontend deploy: an
+  anonymous `POST /api/v1/relay/attestation` answers `400` (signature
+  validation reached) instead of `403 operator_key_required`, while
+  `POST /api/v1/relay/migration` without a key still answers `403`.
 - **API docs are public** (`QTRUST_DOCS_PUBLIC=true`), so the header's
   "API docs" link works for everyone.
 - **Indexer:** `watchEvent` now uses `poll: true` (HTTP transports have no push
@@ -157,6 +161,27 @@ the backend suite with `npx vitest run --maxWorkers=2` on a busy machine —
 under full parallelism the pool starves and a few suites hit the 5 s default
 timeout (they pass in isolation).
 
+Live state on 2026-10-21:
+
+- `deploy/smoke-test.ps1` against the hosted deployment: **all checks pass**
+  (API health, authenticated docs, planner proxy, scanner proxy, frontend).
+- `frontend/scripts/browser-check.mjs`: **31/31** against a production build
+  (`npm run build && npx next start`) wired to the local Docker API.
+- The same script cannot run against `https://q-trust-nu.vercel.app` from
+  this workstation: the local network's FortiGuard web filter and SSL
+  inspection answer `*.vercel.app` with a block page and an untrusted
+  certificate, so the browser never reaches the app. The API-level checks
+  above are unaffected (PowerShell trusts the inspection CA), and the live
+  proxy behaviour was verified directly: `POST /api/v1/relay/attestation`
+  without a key answers `400` (signature validation) and
+  `POST /api/v1/relay/migration` without a key answers `403`.
+- The hosted backend's tunnel variables had gone stale while the Vercel API
+  was unreachable, which made `/v1/plans` and `/v1/scan/source` answer `503`
+  (quick-tunnel URLs change whenever a tunnel restarts). Re-running
+  `deploy/vercel-backend.ps1` re-synced the current URLs and redeployed;
+  `deploy/ensure-local-stack.ps1` does the same automatically when it can
+  reach Vercel.
+
 The browser check covers: home loads and links to real records, `/v/<id>`
 renders VALID/REVOKED, `/scanner` runs a full scan and reaches the AI planner
 and GPU lab panels, and `/dashboard` / `/vendors` load without server errors.
@@ -253,3 +278,23 @@ The Vercel serverless deployment is the no-card path that works today.
   The Base Sepolia relayer/deployer keys were also visible in that log; they
   are testnet-only and the relayer cannot be rotated because
   `DEFAULT_ADMIN_ROLE` was renounced.
+- **The Neon (hosted Postgres) credential is still the one secret that has
+  not been rotated.** It was provisioned through the Vercel Marketplace, so
+  no Neon API key is available on this machine (`neonctl` is not installed
+  and `NEON_API_KEY` is not in any env file) — the password has to be reset
+  in the Neon console (or with a Neon API key), and the new value then has to
+  be written to every consumer in one pass: `.env` (`QTRUST_PG_URL`,
+  `QTRUST_COMPOSE_PG_URL`), `frontend/.env.local` (`DATABASE_URL`,
+  `DATABASE_URL_UNPOOLED`, `POSTGRES_*`), the `q-trust` Vercel project
+  (`DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `POSTGRES_*`,
+  `POSTGRES_PRISMA_URL`, `POSTGRES_URL`, `POSTGRES_URL_NON_POOLING`,
+  `POSTGRES_URL_NO_SSL`) and the `qtrust-backend` Vercel project
+  (`QTRUST_PG_URL`). Until that is done, rotate the Neon password **first**
+  and update all of them in the same session — the local indexer and the
+  hosted API share that database.
+- **The local network filters `*.vercel.app`.** FortiGuard's web filter and
+  SSL inspection block the Vercel domains from this workstation (the browser
+  gets a "Web Page Blocked" page, `curl` gets an untrusted root), so the
+  live browser suite cannot run here. The hosted API is still reachable from
+  tools that trust the inspection CA, and the tunnel watchdog re-points
+  Vercel whenever a quick tunnel comes back with a new URL.
