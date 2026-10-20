@@ -65,14 +65,31 @@ if (!WALLETCONNECT_PROJECT_ID || typeof WALLETCONNECT_PROJECT_ID !== "string") {
 }
 
 /**
+ * Is this a project ID WalletConnect will actually accept?
+ *
+ * The public "demo" ID is rate limited and, as of the 2026-10 check,
+ * `api.web3modal.org/appkit/v1/config?projectId=demo` answers 403 — the QR
+ * flow simply cannot start. Advertising a connector that is guaranteed to
+ * fail is worse than not showing it: visitors pick it, see an error and
+ * conclude the wallet support is broken. So the WalletConnect-based wallets
+ * (WalletConnect itself and Rainbow, which relays over WalletConnect) are only
+ * listed when a real project ID from https://cloud.walletconnect.com is set.
+ *
+ * Everything listed otherwise works with no third-party account:
+ *   - injectedWallet: any EIP-1193 extension (Rabby, Brave, Frame, ...)
+ *   - metaMaskWallet: MetaMask extension / MetaMask SDK
+ *   - coinbaseWallet: Coinbase Wallet extension and mobile deep link
+ */
+const HAS_REAL_WALLETCONNECT =
+  Boolean(RAW_WALLETCONNECT_PROJECT_ID) && RAW_WALLETCONNECT_PROJECT_ID !== "demo";
+
+/**
  * Explicit wallet list.
  *
  * RainbowKit's default list now includes the Base Account connector, which
  * pulls `@base-org/account` -> `@coinbase/cdp-sdk` and its optional `@x402/*`
  * scheme packages. Those dynamic imports fail to resolve under Turbopack
- * (Vercel build error), so we pin a well-known set instead: MetaMask, Coinbase
- * Wallet, WalletConnect and Rainbow. Users can still connect Base Account or
- * any WalletConnect-compatible wallet through those connectors.
+ * (Vercel build error), so we pin a well-known set instead.
  */
 const WALLETS = [
   {
@@ -80,13 +97,15 @@ const WALLETS = [
     // `injectedWallet` is the generic EIP-1193 path. Keep it first so users
     // with a browser extension that is not one of the branded SDK wallets can
     // connect without WalletConnect or the MetaMask SDK transport.
-    wallets: [
-      injectedWallet,
-      metaMaskWallet,
-      coinbaseWallet,
-      walletConnectWallet,
-      rainbowWallet,
-    ],
+    wallets: HAS_REAL_WALLETCONNECT
+      ? [
+          injectedWallet,
+          metaMaskWallet,
+          coinbaseWallet,
+          walletConnectWallet,
+          rainbowWallet,
+        ]
+      : [injectedWallet, metaMaskWallet, coinbaseWallet],
   },
 ];
 

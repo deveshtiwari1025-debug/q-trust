@@ -1,6 +1,6 @@
 # Q-Trust deployment status
 
-_Last updated: 2026-10-20_
+_Last updated: 2026-10-21_
 
 ## Live now
 
@@ -111,13 +111,39 @@ the frontend after reseeding).
 Migration record: `0xec0e55de99ddcb18b9a394be9f704c703e7d5ade53b29e16c4fc0a60264d3984`
 (tx `0x014e6d93c8ded0e535ebecf11985736f867ea0708a949983c5b3ad16a794fe8e`).
 
+### Demo estate (default scanner target)
+
+`deploy/demo-estate/` is a small synthetic estate (API gateway, payments,
+mobile handshake) with intentional RSA-2048, ECDSA P-256, X25519, AES-128 and
+ML-KEM-768 usage. It is mounted into the API container at
+`/workspace/projects/deploy/demo-estate` and is the scanner's default target,
+so a first-time visitor gets a meaningful scan (20 findings across 3 services)
+in one click.
+
+The scanner recognises post-quantum modules (`pqcrypto.kem.ml_kem_768`,
+`kyber`, `ml_dsa`, `dilithium`, `slh_dsa` / `sphincs`) and reports them as
+`key_type: pqc`, so an already-migrated asset scores 10 (PQC_READY) instead of
+being labelled broken. Libraries and protocol dependencies are classified as
+inventory rows (18 / 30 / 45) rather than critical algorithm findings.
+
+### Launch films
+
+| File | What it is |
+|---|---|
+| `brag-output/brag.mp4` | 21.5 s teaser, no narration, -18.7 LUFS |
+| `brag-output/explainer.mp4` | 92.6 s narrated explainer (9 scenes), -18.0 LUFS, real UI captures |
+| `brag-output/explainer.jpg` | Explainer poster (finale with the live URL) |
+
+Both are HyperFrames compositions; see `brag-output/README.md` for the scene
+tables, voiceover settings and re-render commands.
+
 ### Verification
 
 ```
 powershell -File deploy/smoke-test.ps1 -RepoRoot <repo>   # API + planner + scanner + frontend
 node frontend/scripts/browser-check.mjs                   # live anonymous browser flows
-npm test --prefix backend                                  # 108 tests
-npm test --prefix frontend                                 # 138 tests
+npm test --prefix backend                                  # 109 tests
+npm test --prefix frontend                                 # 139 tests
 ```
 
 The browser check covers: home loads and links to real records, `/v/<id>`
