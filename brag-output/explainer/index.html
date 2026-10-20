@@ -510,6 +510,11 @@
                 <span class="lvl">relayed by protocol</span>
               </div>
             </div>
+
+            <div class="anno green anim" id="s8-wallet" style="top: 52px; right: 34px">
+              <span class="anno-k">wallet connected</span>
+              <span class="anno-v">0xE610&hellip;875C</span>
+            </div>
           </div>
         </div>
       </section>
@@ -755,6 +760,8 @@
         tl.to("#s8-frame", { opacity: 1, duration: 0.9 }, 76.9);
         tl.fromTo("#s8-frame", { y: 26 }, { y: 0, duration: 0.9 }, 76.9);
         tl.fromTo("#s8-img", { scale: 1.04 }, { scale: 1, duration: 10.0, ease: "none" }, 76.9);
+        tl.to("#s8-wallet", { opacity: 1, duration: 0.5 }, 78.1);
+        tl.fromTo("#s8-wallet", { y: 10 }, { y: 0, duration: 0.5 }, 78.1);
         tl.to("#s8-scores", { opacity: 1, duration: 0.7 }, 79.4);
         tl.fromTo("#s8-scores", { y: 16 }, { y: 0, duration: 0.7 }, 79.4);
 

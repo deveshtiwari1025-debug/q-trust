@@ -45,7 +45,7 @@ Nine scenes:
 | 44.2 - 52.9 s | Plan - the roadmap with effort, cost and completion date |
 | 52.9 - 65.3 s | Anchor - the hash-only record on Base Sepolia |
 | 65.3 - 76.0 s | Verify - the public verdict, no wallet required |
-| 76.0 - 87.4 s | Vendor - gasless attestations, EIP-712, VENDOR_ROLE, zero gas |
+| 76.0 - 87.4 s | Vendor - connected wallet, gasless attestations, EIP-712, VENDOR_ROLE, zero gas |
 | 87.4 - 92.6 s | Finale - "Make trust verifiable", the live URL |
 
 The product tour uses real 1600x900 captures of the running app
