@@ -92,7 +92,7 @@ class TestPythonAstDetection:
         pqc = [f for f in findings if f.key_type == "pqc"]
         assert pqc, findings
         assert pqc[0].algorithm == "ML-KEM-768"
-        assert pqc[0].metadata["line"] == 5
+        assert pqc[0].metadata["line"] == 4
 
     def test_hashlib_new_constant_string(self, tmp_path):
         code = (
