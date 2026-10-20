@@ -3,11 +3,13 @@
 /**
  * Operator access UI.
  *
- * The same-origin proxy refuses the privileged surface (scanning, evidence
- * creation, GPU jobs, planner, relayer, webhooks) unless the caller presents
- * its own API key — see `lib/api-route-policy.ts`. Before this component the
- * affected controls simply failed with an opaque 403. They now render either a
- * proactive "Operator access" panel or an in-context prompt.
+ * The same-origin proxy refuses the money/state-mutating surface (relayer
+ * submissions, workspace writes, webhook mutations, credential issuance)
+ * unless the caller presents its own API key — see `lib/api-route-policy.ts`.
+ * Scanner, planner, evidence and GPU compute are open to every visitor and
+ * never need this panel. Before this component the affected controls simply
+ * failed with an opaque 403; they now render either a proactive "Operator
+ * access" panel or an in-context prompt.
  *
  * The key is held in `sessionStorage` for the tab, is never rendered back in
  * full, and is never sent anywhere except the same-origin proxy.
@@ -109,10 +111,10 @@ export function OperatorAccessPanel({ defaultOpen = false }: { defaultOpen?: boo
         </StatusPill>
       </summary>
       <p className="mt-3 max-w-prose text-micro leading-6 text-muted-foreground">
-        Scanning targets, creating evidence records, running GPU analysis, requesting
-        planner output and submitting attestations all run privileged backend code, so the
-        API requires the caller&rsquo;s own key. Public verification, risk scoring and
-        compliance evaluation need no key.
+        Only relayer submissions, workspace writes, webhook mutations and credential
+        issuance require the caller&rsquo;s own key. Scanning, the AI planner, evidence
+        records, GPU analysis, public verification, risk scoring and compliance
+        evaluation are open to every visitor and need no key.
       </p>
       <KeyField />
     </details>
@@ -139,9 +141,9 @@ export function OperatorAccessInline({
     >
       <p className="font-semibold">Operator access required</p>
       <p className="mt-1 leading-5">
-        <code className="rounded bg-card/70 px-1 font-mono">{endpoint}</code> runs privileged
-        backend code. Add your Q-Trust API key to continue, or call the API directly with your
-        own key.
+        <code className="rounded bg-card/70 px-1 font-mono">{endpoint}</code> mutates
+        on-chain state or spends relayer gas, so it needs an API key. Add your Q-Trust API
+        key to continue, or call the API directly with your own key.
       </p>
       {current ? (
         <p className="mt-2 leading-5">

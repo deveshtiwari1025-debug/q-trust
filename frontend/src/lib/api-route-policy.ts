@@ -24,14 +24,19 @@
  * ---------------------
  *  - `public-read`     GET-only, safe to expose to anonymous browsers. The
  *                      proxy attaches the server-side key when configured.
- *  - `public-compute`  Stateless POSTs (scoring, evaluation, verification).
- *                      No backend writes, no filesystem access.
- *  - `operator`        Privileged surface: filesystem scanning, on-disk
- *                      evidence writes, relayer submissions, GPU jobs, planner
- *                      and webhook mutations. The proxy NEVER attaches the
- *                      server-side admin key to these routes. A caller must
- *                      present its own key via `x-qtrust-api-key`, which the
- *                      proxy forwards as `x-api-key`. Anonymous callers get 403.
+ *  - `public-compute`  Compute and demo routes every visitor may use without
+ *                      an account: scoring, evaluation, verification, the
+ *                      scanner, roadmap/evidence generation, the planner and
+ *                      the GPU/ML panels. The proxy attaches the server-side
+ *                      key when configured; all of these are rate limited on
+ *                      the backend and constrained by QTRUST_SCAN_ALLOWED_ROOTS.
+ *  - `operator`        Money/state-mutating surface: relayer submissions
+ *                      (spends gas), workspace writes (`/v1/write/*`), webhook
+ *                      mutations and credential issuance. The proxy NEVER
+ *                      attaches the server-side admin key to these routes. A
+ *                      caller must present its own key via `x-qtrust-api-key`,
+ *                      which the proxy forwards as `x-api-key`. Anonymous
+ *                      callers get 403.
  */
 
 export type RouteClass = "public-read" | "public-compute" | "operator";
@@ -99,12 +104,21 @@ export const ROUTE_POLICY: readonly RouteRule[] = [
   { prefix: "/v1/credentials/verify", methods: POST, routeClass: "public-compute" },
   { prefix: "/v1/evidence/verify", methods: POST, routeClass: "public-compute" },
 
+  // ---- Public demo surface: scanner, planner, evidence and GPU panels ----
+  //
+  // These were operator-gated originally, which meant the shipped scanner,
+  // planner and GPU panels returned 403 for every visitor of the demo site.
+  // They are compute-only (no gas, no secrets): the backend rate limits them,
+  // QTRUST_SCAN_ALLOWED_ROOTS constrains filesystem scans, evidence records are
+  // append-only and GPU jobs run on the operator's local model server. The
+  // server-side key is attached so anonymous visitors can use them.
+  { prefix: "/v1/scan/", methods: POST, routeClass: "public-compute" },
+  { prefix: "/v1/evidence/create", methods: POST, routeClass: "public-compute" },
+  { prefix: "/v1/roadmap/generate", methods: POST, routeClass: "public-compute" },
+  { prefix: "/v1/plans", methods: POST, routeClass: "public-compute" },
+  { prefix: "/v1/gpu/", methods: GET_POST, routeClass: "public-compute" },
+
   // ---- Operator surface: requires the caller's own API key ----
-  { prefix: "/v1/scan/", methods: POST, routeClass: "operator" },
-  { prefix: "/v1/evidence/create", methods: POST, routeClass: "operator" },
-  { prefix: "/v1/roadmap/generate", methods: POST, routeClass: "operator" },
-  { prefix: "/v1/plans", methods: POST, routeClass: "operator" },
-  { prefix: "/v1/gpu/", methods: GET_POST, routeClass: "operator" },
   { prefix: "/v1/relay/", methods: POST, routeClass: "operator" },
   { prefix: "/v1/write/", methods: POST, routeClass: "operator" },
   { prefix: "/v1/webhooks/", methods: POST, routeClass: "operator" },

@@ -511,9 +511,36 @@ export function isValidIpfsCid(cidOrUri: string): boolean {
 
 export async function fetchIpfsJson(cidOrUri: string): Promise<Record<string, unknown> | null> {
   const gateway = process.env.NEXT_PUBLIC_IPFS_GATEWAY ?? "https://ipfs.io/ipfs/";
-  const cid = cidOrUri.replace(/^ipfs:\/\//, "");
-  if (!isValidIpfsCid(cid)) return null;
-  const url = `${gateway}${cid}`;
+  let url: string;
+  if (/^https?:\/\//i.test(cidOrUri)) {
+    // Demo records point at ordinary HTTPS documents (the deployed /demo
+    // folder), while production records can still use ipfs:// CIDs. Only
+    // public HTTPS hosts are fetched: this runs server-side, so localhost and
+    // private ranges are rejected to avoid SSRF through on-chain metadata.
+    let parsed: URL;
+    try {
+      parsed = new URL(cidOrUri);
+    } catch {
+      return null;
+    }
+    if (parsed.protocol !== "https:") return null;
+    const host = parsed.hostname.toLowerCase();
+    const privateHost =
+      host === "localhost" ||
+      host.endsWith(".local") ||
+      host.endsWith(".internal") ||
+      /^(127\.|10\.|192\.168\.|169\.254\.|0\.)/.test(host) ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+      host === "[::1]" ||
+      host === "::1" ||
+      /^f[cd]/.test(host);
+    if (privateHost) return null;
+    url = parsed.toString();
+  } else {
+    const cid = cidOrUri.replace(/^ipfs:\/\//, "");
+    if (!isValidIpfsCid(cid)) return null;
+    url = `${gateway}${cid}`;
+  }
   try {
     const response = await fetch(url, { cache: "no-store", redirect: "error" });
     if (!response.ok) return null;

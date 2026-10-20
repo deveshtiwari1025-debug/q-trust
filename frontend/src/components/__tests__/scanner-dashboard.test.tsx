@@ -68,7 +68,7 @@ describe("ScannerDashboard", () => {
     fetchMock.mockResolvedValue(okResponse(SCAN_RESPONSE));
     render(<ScannerDashboard />);
 
-    fireEvent.change(screen.getByPlaceholderText("e.g. /opt/app or ./src"), {
+    fireEvent.change(screen.getByLabelText("Target directory"), {
       target: { value: "/repo" },
     });
     fireEvent.click(screen.getByRole("button", { name: /run scan/i }));
@@ -103,7 +103,7 @@ describe("ScannerDashboard", () => {
     );
     render(<ScannerDashboard />);
 
-    fireEvent.change(screen.getByPlaceholderText("e.g. /opt/app or ./src"), {
+    fireEvent.change(screen.getByLabelText("Target directory"), {
       target: { value: "/repo" },
     });
     fireEvent.click(screen.getByRole("button", { name: /run scan/i }));

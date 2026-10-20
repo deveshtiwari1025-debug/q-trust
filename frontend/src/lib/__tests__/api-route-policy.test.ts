@@ -1,12 +1,12 @@
 /**
  * Contract tests binding the UI to the proxy authorization policy.
  *
- * The defect these lock down: the shipped UI called privileged endpoints
- * (`/v1/scan/full`, `/v1/plans`, `/v1/gpu/*`, `/v1/relay/attestation`, …) that
- * the same-origin proxy denied by default, so those controls returned 403 in
- * every deployment using the proxy — while the component tests stubbed `fetch`
- * and never noticed. The proxy tests asserted the denial; the UI tests asserted
- * the call. Nothing compared the two lists.
+ * The defect these lock down: the shipped UI called operator endpoints
+ * (`/v1/relay/attestation`, `/v1/webhooks/subscribe`, …) that the proxy denied
+ * by default, so those controls returned 403 in every deployment using the
+ * proxy — while the component tests stubbed `fetch` and never noticed. The
+ * proxy tests asserted the denial; the UI tests asserted the call. Nothing
+ * compared the two lists.
  *
  * This file compares them: it reads the UI source, extracts every `/v1/...`
  * endpoint literal, and fails if the policy module does not classify it.
@@ -102,7 +102,8 @@ describe("API route policy", () => {
     expect(classifyEndpoint("/v1/plans/did:web:example", "GET")).toBeNull();
     // ...while the operator surface behind them still requires a key.
     expect(classifyEndpoint("/v1/relay/attestation", "POST")).toBe("operator");
-    expect(classifyEndpoint("/v1/plans", "POST")).toBe("operator");
+    // The planner, scanner and GPU panels are open compute (demo posture).
+    expect(classifyEndpoint("/v1/plans", "POST")).toBe("public-compute");
   });
 
   it("does not grant access on a shared string prefix", () => {
@@ -117,7 +118,24 @@ describe("API route policy", () => {
   });
 
   it("classifies the privileged surface exactly as the UI expects", () => {
+    // Money/state-mutating surface: still requires the caller's own key.
     const operatorEndpoints: Array<[string, string]> = [
+      ["/v1/relay/attestation", "POST"],
+      ["/v1/relay/cbom", "POST"],
+      ["/v1/relay/migration", "POST"],
+      ["/v1/write/assets", "POST"],
+      ["/v1/webhooks/subscribe", "POST"],
+      ["/v1/credentials/issue", "POST"],
+    ];
+    for (const [path, method] of operatorEndpoints) {
+      expect(endpointRequiresOperatorKey(path, method), `${method} ${path}`).toBe(true);
+    }
+
+    // Compute for anonymous browsers: scanner, planner, evidence, GPU panels.
+    for (const [path, method] of [
+      ["/v1/risk/score", "POST"],
+      ["/v1/compliance/evaluate", "POST"],
+      ["/v1/evidence/verify", "POST"],
       ["/v1/scan/full", "POST"],
       ["/v1/scan/source", "POST"],
       ["/v1/scan/manifests", "POST"],
@@ -128,18 +146,6 @@ describe("API route policy", () => {
       ["/v1/gpu/rl/plan", "POST"],
       ["/v1/gpu/anomaly/score", "POST"],
       ["/v1/gpu/quantum/estimate/2048", "GET"],
-      ["/v1/relay/attestation", "POST"],
-      ["/v1/webhooks/subscribe", "POST"],
-    ];
-    for (const [path, method] of operatorEndpoints) {
-      expect(endpointRequiresOperatorKey(path, method), `${method} ${path}`).toBe(true);
-    }
-
-    // Stateless compute stays open to anonymous browsers.
-    for (const [path, method] of [
-      ["/v1/risk/score", "POST"],
-      ["/v1/compliance/evaluate", "POST"],
-      ["/v1/evidence/verify", "POST"],
     ] as Array<[string, string]>) {
       expect(endpointRequiresOperatorKey(path, method), `${method} ${path}`).toBe(false);
       expect(classifyEndpoint(path, method)).toBe("public-compute");

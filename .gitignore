@@ -230,3 +230,11 @@ qtrust_data/splits/test.json
 showcase/scan.json
 showcase/cbom.json
 showcase/*.sarif
+
+# Deployment run artifacts
+deploy/logs/
+frontend/.vercel/
+.vercel/
+
+# Neon agent-skills metadata written by tooling; not part of the app
+frontend/skills-lock.json

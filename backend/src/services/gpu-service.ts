@@ -227,7 +227,7 @@ export async function registerGPURoutes(server: FastifyInstance): Promise<void> 
       summary: "Analyze a PQC implementation for timing side-channel leakage",
       body: SideChannelAnalyzeSchema,
     },
-    config: { rateLimit: { max: 5, timeWindow: "1 minute" } },
+    config: { rateLimit: { max: 15, timeWindow: "1 minute" } },
     async handler(request: FastifyRequest<{ Body: SideChannelBody }>, reply: FastifyReply) {
       if (!gpuEnabled()) return fail(reply, 503, { error: "GPU features disabled" });
       const b = request.body;
@@ -278,7 +278,7 @@ export async function registerGPURoutes(server: FastifyInstance): Promise<void> 
       summary: "Score a CBOM for anomalies (VAE reconstruction error)",
       body: AnomalyScoreSchema,
     },
-    config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+    config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
     async handler(request: FastifyRequest<{ Body: { cbom: Record<string, unknown> } }>, reply: FastifyReply) {
       if (!gpuEnabled()) return fail(reply, 503, { error: "GPU features disabled" });
       const { code, payload: result } = await runBridge("anomaly", { cbom: request.body.cbom }, 60_000);
@@ -328,7 +328,7 @@ export async function registerGPURoutes(server: FastifyInstance): Promise<void> 
       summary: "RL-based migration plan (proxied to planner microservice; not GPU-gated)",
       body: RLPlanSchema,
     },
-    config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+    config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
     async handler(request: FastifyRequest<{ Body: { cbom: Record<string, unknown> } }>, reply: FastifyReply) {
       try {
         const resp = await fetch(`${PLANNER_URL}/rl/plan`, {

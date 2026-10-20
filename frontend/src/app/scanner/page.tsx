@@ -23,8 +23,9 @@ export default function ScannerPage() {
             assess quantum risk, evaluate compliance, and plan your migration roadmap.
           </p>
           <p className="mt-3 max-w-3xl rounded-lg border border-border bg-card px-3 py-2 text-micro leading-5 text-muted-foreground">
-            Web scans run against server-mounted directories (operator access
-            required). For live TLS host scans, use the{" "}
+            Web scans run against server-mounted demo directories and are open
+            to every visitor. For live TLS host scans of your own network, use
+            the{" "}
             <code className="rounded bg-neutral-surface px-1 py-0.5 font-mono">crypto-inspector</code>{" "}
             CLI — see the quick start in the README.
           </p>
