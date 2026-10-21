@@ -64,6 +64,9 @@ site is publicly reachable.
   The script creates/reuses the `qtrust-backend` project, upserts every
   `QTRUST_*` variable from `.env` with hosted overrides, writes
   `backend/.vercel/project.json`, and runs `vercel deploy --prod`.
+  If the Vercel CLI session has expired, the script asks the CLI to refresh it
+  once (`vercel whoami`) and retries the API call instead of failing the
+  watchdog run.
 
 ### Keeping the local half alive
 
@@ -72,15 +75,18 @@ site is publicly reachable.
 1. starts Docker Desktop if it is not running;
 2. ensures `postgres`, `redis`, `api`, and `planner` containers are up;
 3. ensures both `cloudflared` quick tunnels exist (downloads `cloudflared` to
-   `%LOCALAPPDATA%\qtrust\bin` on first use) with `--edge-ip-version 4`; forcing
-   IPv4 avoids the QUIC timeouts this network sees on Cloudflare's IPv6 edges;
+   `%LOCALAPPDATA%\qtrust\bin` on first use) with
+   `--edge-ip-version 4 --protocol http2`. This network drops cloudflared's
+   QUIC edge connections after a few minutes, so the tunnels use HTTP/2 over
+   TCP instead;
 4. if a tunnel URL changed, updates `.env` and re-syncs + redeploys the Vercel
    backend automatically.
 
-A running tunnel is never killed just because one health probe returns 530/502:
-quick tunnels reconnect on the same URL, and restarting one changes the URL and
-costs a redeploy. The watchdog only starts a tunnel when no process for that
-port exists.
+A running tunnel is kept through a short 530/502 blip, because quick tunnels
+often reconnect on the same URL. If health probes keep failing for 15 minutes,
+the watchdog replaces that tunnel, updates `.env`, and redeploys the backend so
+the hosted API follows the new URL. This recovers a QUIC connection that will
+not come back instead of leaving the scanner and planner permanently dark.
 
 ```
 powershell -File deploy/ensure-local-stack.ps1                    # check once
@@ -141,14 +147,28 @@ tables, voiceover settings and re-render commands.
 
 ```
 powershell -File deploy/smoke-test.ps1 -RepoRoot <repo>   # API + planner + scanner + frontend
-node frontend/scripts/browser-check.mjs                   # live anonymous browser flows
+npm run audit:live --prefix frontend                      # 146 live checks, full stack
+node frontend/scripts/browser-check.mjs                   # quick anonymous browser pass
 npm test --prefix backend                                  # 109 tests
 npm test --prefix frontend                                 # 139 tests
+pytest inspector/tests -q                                  # CI installs ./inspector[dev,ml]
 ```
 
-The browser check covers: home loads and links to real records, `/v/<id>`
-renders VALID/REVOKED, `/scanner` runs a full scan and reaches the AI planner
-and GPU lab panels, and `/dashboard` / `/vendors` load without server errors.
+`audit:live` drives the production site in a real Chromium: every route,
+verify lookup, mobile menu, the injected-wallet connect/switch/disconnect
+flow, org/vendor/new-wallet roles, all eight scanner tabs, the GPU actions,
+API auth gates, CORS, security headers, secret-leak checks, and axe WCAG
+serious/critical checks. It writes `report.json` and screenshots under
+`%TEMP%/opencode/qtrust-audit`.
+
+The last full run (2026-10-21) passed **146/146** checks. That run created and
+verified a real evidence record, ran every scanner tab and GPU action, exercised
+all four wallet roles plus a wrong-chain connect and disconnect, and found no
+serious/critical axe violations on the home, record, dashboard, vendor and
+scanner pages. The Neon read model and Base Sepolia agree: 3 assets, 1 verified
+migration, 3 vendor attestations, and the latest audit result is `Passed`; there
+were zero registry events after the indexer checkpoint, so the read model is
+current.
 
 ## Base Sepolia contracts
 
@@ -187,7 +207,9 @@ The Vercel serverless deployment is the no-card path that works today.
   re-points Vercel when tunnel URLs change.
 - **Quick-tunnel URLs are not stable.** The watchdog updates `.env` and
   redeploys the backend when they change; otherwise run
-  `deploy/vercel-backend.ps1` after editing the two tunnel variables.
+  `deploy/vercel-backend.ps1` after editing the two tunnel variables. The
+  tunnels use HTTP/2 and are replaced after a sustained outage, but they are
+  still best-effort and have no uptime SLA.
 - **Serverless cold starts.** The first request after idle takes ~1–2 s while
   the Fastify app boots; `/tmp/qtrust` on Vercel is ephemeral (evidence is
   proxied to the local API, which keeps the durable chain).
@@ -197,11 +219,17 @@ The Vercel serverless deployment is the no-card path that works today.
 - **Webhook subscribers on Vercel** are held in memory per warm instance and
   are lost on cold start. The local API uses Redis and is authoritative for
   long-lived subscriptions.
-- **WalletConnect uses the public `demo` project ID** with
-  `NEXT_PUBLIC_QTRUST_ALLOW_DEMO_WALLETCONNECT=1`. Browser-extension wallets
-  work normally; WalletConnect pairing is rate-limited by the demo project.
+- **WalletConnect / Rainbow are hidden without a real project ID.** The build
+  falls back to the public `demo` ID only for local previews; production does
+  not render an entry that cannot complete a pairing. Injected browser wallets
+  (including MetaMask via the "Browser Wallet" entry) and Coinbase are offered.
   Create a project at https://cloud.walletconnect.com, set
-  `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`, and redeploy.
+  `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`, and redeploy to add WalletConnect.
+- **Only the deployed chain is advertised to wallets.** The app offers the
+  single network in `lib/config.ts` (Base Sepolia by default). A wallet that
+  connects while on another network is asked to switch to Base Sepolia; this
+  prevents the dashboard from looking healthy while reading a registry that has
+  no code on the wallet's chain.
 - **No custom domain.** The Vercel URLs are the production entry points.
 - **Shared secrets were rotated** after an accidental env dump in the local
   session log: API key, planner key, webhook encryption key, and VC issuer key.

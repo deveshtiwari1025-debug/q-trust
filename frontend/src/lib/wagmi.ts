@@ -1,9 +1,9 @@
 /**
  * wagmi + RainbowKit wallet configuration.
  *
- * Chains: Base (mainnet) and Base Sepolia — matching the deployments in
- * lib/config.ts. The expected chain for contract interactions is derived
- * from QTRUST_USE_MAINNET there (Base Sepolia default, mainnet when set).
+ * Chain: the single network selected in lib/config.ts (Base Sepolia by
+ * default, Base when QTRUST_USE_MAINNET is set). The contracts are deployed
+ * on one chain at a time, so wallets on any other network are asked to switch.
  */
 import { getDefaultConfig } from "@rainbow-me/rainbowkit";
 import {
@@ -14,6 +14,7 @@ import {
   walletConnectWallet,
 } from "@rainbow-me/rainbowkit/wallets";
 import { base, baseSepolia } from "wagmi/chains";
+import { CHAIN } from "./config";
 
 /**
  * WalletConnect project ID. RainbowKit requires a non-empty string; a
@@ -109,10 +110,17 @@ const WALLETS = [
   },
 ];
 
+// The deployment's contracts live on exactly one chain (CHAIN). Advertising
+// both Base networks makes the other one look supported: a wallet on Base
+// mainnet then connects without a wrong-network prompt and the app silently
+// reads a registry that has no code. Keep only the active chain so wagmi and
+// RainbowKit ask the wallet to switch when it is anywhere else.
+const ACTIVE_CHAIN = CHAIN.id === base.id ? base : baseSepolia;
+
 export const wagmiConfig = getDefaultConfig({
   appName: "Q-Trust",
   projectId: WALLETCONNECT_PROJECT_ID,
-  chains: [base, baseSepolia],
+  chains: [ACTIVE_CHAIN],
   ssr: true,
   wallets: WALLETS,
 });
